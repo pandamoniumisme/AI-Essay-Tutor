@@ -140,7 +140,9 @@ def _run(job_id: str, question_imgs, essay_imgs, language) -> None:
     """Background thread body for /jobs/transcribe."""
     _run_generic(
         job_id,
-        lambda progress: do_transcribe(question_imgs, essay_imgs, language, on_progress=progress),
+        lambda progress: do_transcribe(
+            question_imgs, essay_imgs, language, on_progress=progress,
+        ),
     )
 
 

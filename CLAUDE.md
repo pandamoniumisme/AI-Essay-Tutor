@@ -14,11 +14,20 @@ LibreOffice Writer
                                                          │ HTTP
                                                          ▼
                           server/  (FastAPI + uvicorn, separate venv)
-                            ├─ Qwen2.5-VL-7B-Instruct INT4 → iGPU  (captioner: ALL OCR + picture description)
-                            └─ Qwen3-8B-Instruct INT4-cw   → NPU   (grader, structured JSON)
 ```
 
-Server venv lives at `%LOCALAPPDATA%\AIEssayTutor\venv`. Models at `%LOCALAPPDATA%\AIEssayTutor\models\{qwen2_5_vl_7b_int4_ov, qwen3_8b_int4_cw}`. Total ~10.7 GB on disk.
+**Two language routes** (selected from the dialog's language radio; resolved server-side by `models.manager.route_for(language)`):
+
+| Route | Captioner (OCR + picture description) | Grader (PSLE rubric → structured JSON) |
+|---|---|---|
+| `en` | Gemma 3 4B-IT (NPU, multimodal, gated repo) | Gemma 3 4B-IT — same VLMPipeline reused for text-only generation |
+| `zh-Hans` | Qwen2.5-VL-7B (iGPU) | Qwen3-8B INT4-cw (NPU) |
+
+Default: Chinese.
+
+(Earlier "Fast" mode using Qwen2.5-VL-3B captioner + Qwen3-4B grader was retired on 2026-05-07: 3B's OCR was unreliable on primary-school handwriting, and 4B's grader feedback was noticeably weaker than 8B's. Both models are deleted from disk.)
+
+Server venv: `%LOCALAPPDATA%\AIEssayTutor\venv`. Models: `%LOCALAPPDATA%\AIEssayTutor\models\` — 3 directories (gemma_3_4b_it, qwen2_5_vl_7b, qwen3_8b), ~12 GB total.
 
 **Async job pattern.** Extension never blocks on ML calls. `POST /jobs/{transcribe|grade}` → `job_id`; client polls `GET /jobs/{id}` every 3 s. A serial gate (`_RUNNING_JOB_ID` in `api/jobs.py`) returns 409 on concurrent submission — only one ML job at a time.
 
@@ -51,7 +60,7 @@ Server venv lives at `%LOCALAPPDATA%\AIEssayTutor\venv`. Models at `%LOCALAPPDAT
 - **Captioner IR layout.** Multi-component VLM IRs have `openvino_language_model.xml`, not `openvino_model.xml`. `_get_pipeline()` checks for either.
 - **OCR is captioner-only.** Paddleocr was retired 2026-05-07 (PIR/oneDNN crashes on Lunar Lake). Qwen2.5-VL-7B handles all OCR + picture description. To revert, see comment in `server/pyproject.toml` and `_ensure_paddleocr` in `manager.py`.
 - **Singapore vocabulary.** Both grader prompts have explicit allowlists (HDB, MRT, kopitiam, char kway teow, 巴刹, 组屋, 椰浆饭, "Auntie/Uncle" in dialogue, British vs American spelling, etc.). Don't tighten these without asking.
-- **Sticky fallback.** If the primary LLM fails to compile on NPU, the picked model is recorded in `models/manifest.json` and reused. Currently always Qwen3-8B (Qwen3.5-9B was tried and rolled back).
+- **Multi-route model dispatch.** `route_for(language, fast)` in `models/manager.py` returns the captioner/grader dirs and devices for one of three routes (en, zh-fast, zh-normal). Both `vision/captioner.py` and `llm/grader.py` cache one pipeline keyed by `(language, fast)` and unload+reload on route change. For the EN route the captioner and grader share the same Gemma 3 VLMPipeline instance (one model, both jobs); for ZH the grader is a dedicated LLMPipeline that calls `captioner.unload()` first.
 - **Debug cache.** Every successful transcribe/grade is written to `%APPDATA%\AIEssayTutor\debug\last_{transcribe,grade}.json`. The dialog's "Debug" checkbox short-circuits matching LLM steps. With both caches present, Start applies directly to the doc — useful for iterating on `writer_ops` without paying the LLM cost. Hand-edit the JSON to test specific edge cases.
 - **NPU grader output cap (open).** Qwen3-8B on NPU has been observed truncating mid-string at ~150 generated tokens despite `max_new_tokens=1800` and ~2000 tokens of headroom in `MAX_PROMPT_LEN=4096`. Worth chasing by toggling `structured_output_config` off, moving grader to GPU, or trimming the rubric prompts.
 - **Memory budget.** Captioner and grader don't co-reside. Grader's `_get_pipeline()` calls `captioner.unload()` first. Don't change this without verifying on 16 GB.

@@ -43,40 +43,51 @@ Return ONLY a JSON object matching the supplied schema. No surrounding prose.
 - `scores.total`: equals content + language.
 - `scores.max_total`: 36 (continuous) or 14 (situational).
 - `scores.band`: integer 1-5 mapped from the percentage above.
-- `tracked_edits`: 0-30 **actual text changes**. Each `original_span` MUST
-  be an exact substring of the student's essay (case + punctuation matched,
-  no paraphrase) AND `suggested_replacement` MUST be **different** from
-  `original_span` -- these become delete/insert redlines in the document.
-  If you want to *suggest adding something* or *recommend a stylistic
-  upgrade without changing existing text*, put it in `comments` instead,
-  NOT in `tracked_edits`. Use tracked_edits only for grammar/spelling/
-  punctuation/word-choice/sentence-structure fixes. Categorise precisely.
+- `tracked_edits`: **mechanical fixes ONLY** -- spelling, punctuation,
+  obvious typos. `category` MUST be one of `spelling`, `punctuation`, or
+  `character_error`. `original_span` is an exact substring of the essay;
+  `suggested_replacement` MUST differ from it.
 
-  Correct example:
-    `original_span`="he run fast"
-    `suggested_replacement`="he ran fast"
-    `category`="grammar"
+  Style, word-choice, grammar rewrites, sentence-structure improvements,
+  sensory detail -- all of those go into `improvement_edits` instead.
+  Round 1's job is to keep the redlines on the original draft to a
+  minimum: just the small errors the student would correct on a re-read.
 
-  Wrong example (FORBIDDEN -- no change):
-    `original_span`="The boy ran into the field."
-    `suggested_replacement`="The boy ran into the field."   <- same!
-    Move this to comments: "After 'ran into the field', add a sensory
-    detail: 'The grass was wet against his ankles.'"
-- `improvement_edits`: 3-12 **score-lifting edits** -- this round teaches
-  the student how to write at a higher band. Each entry has the same shape
-  as `tracked_edits`: `original_span` (exact substring of the *original*
-  essay), `suggested_replacement` (a stronger version), `reason` (why this
-  lifts the score: "uses a metaphor to make the scene vivid", "swaps a
-  generic verb for a precise one", "adds sensory detail so the reader
-  feels the moment", etc.), and `category`. `suggested_replacement` MUST
-  differ from `original_span`. Pick spans that DON'T overlap with
-  `tracked_edits`.
+  Correct example (mechanical):
+    `original_span`="recieve"
+    `suggested_replacement`="receive"
+    `category`="spelling"
 
-  Example:
+    `original_span`="however he ran"
+    `suggested_replacement`="however, he ran"
+    `category`="punctuation"
+
+  Wrong example (FORBIDDEN -- belongs in improvement_edits):
+    `original_span`="he ran fast"
+    `suggested_replacement`="he sprinted, the wind stinging his eyes"
+    <- this is a stylistic upgrade, not a typo fix
+- `improvement_edits`: 3-12 **score-lifting edits** -- this is the round
+  that does the real teaching. Anything beyond mechanical fixes goes here:
+  word-choice upgrades, stronger verbs, metaphors, sensory detail, mental/
+  emotional beats, sentence-structure improvements, paragraph-level
+  organisation tweaks, grammar rewrites that change phrasing rather than
+  just fix a typo. Each entry has the same shape as `tracked_edits`:
+  `original_span` (exact substring of the *original* essay),
+  `suggested_replacement` (a stronger version), `reason` (why this lifts
+  the score), and `category` (any EditCategory value is fine).
+  `suggested_replacement` MUST differ from `original_span`. Pick spans
+  that DON'T overlap with `tracked_edits`.
+
+  Examples:
     `original_span`="He ran fast to the field."
     `suggested_replacement`="He sprinted to the field, the wind stinging his eyes."
     `reason`="Stronger verb plus a sensory detail makes the action vivid."
     `category`="word_choice"
+
+    `original_span`="He was happy."
+    `suggested_replacement`="A grin spread across his face and he punched the air."
+    `reason`="Show, don't tell -- a concrete action carries more emotion than 'happy'."
+    `category`="sentence_structure"
 
 - `target_score`: **the total score** the improved version should reach.
   Integer, at least 30 and at most max_total (36 for continuous, 14 for

@@ -6,11 +6,13 @@
 .DESCRIPTION
   Creates a Python venv at %LOCALAPPDATA%\AIEssayTutor\venv, installs the
   server package (editable, so the developer can edit C:\AI-Essay-Tutor\server\
-  in place), and runs the model manager to download + convert PP-OCRv5,
-  Qwen3.5-9B (with Qwen3-8B fallback), and TrOCR (deferred, see manager.py).
+  in place), and runs the model manager to snapshot-download three
+  pre-converted OpenVINO IRs:
+    en (both jobs) : OpenVINO/gemma-3-4b-it-int4-cw-ov       (~2.5 GB, gated)
+    zh captioner   : OpenVINO/Qwen2.5-VL-7B-Instruct-int4-ov (~5 GB)
+    zh grader      : OpenVINO/Qwen3-8B-int4-cw-ov            (~4.5 GB)
 
-  The model fetch step downloads ~7 GB from HuggingFace and runs the
-  optimum-cli INT4 export for Qwen3.5-9B, which can take 20-40 minutes.
+  Total fresh download is ~12 GB; expect 10-25 minutes on broadband.
 
 .PARAMETER SkipModels
   Skip the models.manager fetch step. Use this when re-running bootstrap
@@ -132,7 +134,7 @@ if ($LASTEXITCODE -ne 0) { Write-Error "pip install failed"; exit 1 }
 if ($SkipModels) {
     Write-Host "`nSkipping model fetch (-SkipModels)" -ForegroundColor Yellow
 } else {
-    Write-Host "`nFetching models - this can take 20-40 minutes for the Qwen3.5-9B INT4 conversion."
+    Write-Host "`nFetching models - this can take 15-30 minutes for the ~16 GB download."
     & $venvPython -m aitutor_server.models.manager fetch
     if ($LASTEXITCODE -ne 0) {
         Write-Warning "model manager exited with code $LASTEXITCODE; check %APPDATA%\AIEssayTutor\server.log"

@@ -28,28 +28,34 @@
 - `scores.total`：内容 + 表达，0-40。
 - `scores.max_total`：40。
 - `scores.band`：1-5 的整数（参照上面的百分比映射）。
-- `tracked_edits`：0-30 个**实际改动**。每条的 `original_span` **必须**是
-  学生作文里的精确子串（字符和标点完全一致，不可改写），而 `suggested_replacement`
-  **必须**与 `original_span` **不同**——这是文档里要呈现的"删除-插入"
-  修订。如果你只是想加一句话或加细节而不改字，请放到 `comments` 里，
-  **不要**放进 `tracked_edits`。仅用于语法、错别字、标点、用词、句子结构、
-  字符错误。`category` 必须准确分类。
+- `tracked_edits`：**只放最基础的机械性修改**——错别字、漏字、多字、
+  标点错误。**`category` 只能是** `spelling`、`punctuation`、
+  `character_error` 中的一个。`original_span` 必须是作文里的精确子串，
+  `suggested_replacement` 必须与之**不同**。
 
-  正确示例：
+  写作风格、用词、句式、语法等等的提升**都不要放在这里**——那些放在
+  `improvement_edits`。`tracked_edits` 的目标是让学生看到"原稿要先改对的
+  小错"，少一点红字，不要让红字盖满整篇作文。
+
+  正确示例（机械性修改）：
     `original_span`="他没有座位所以他摇摇晃晃"
     `suggested_replacement`="他没有座位，所以他摇摇晃晃"
     `category`="punctuation"
 
-  错误示例（**禁止**）：
-    `original_span`="他刚打完篮球，满头大汗，又热又累。"
-    `suggested_replacement`="他刚打完篮球，满头大汗，又热又累。"   ← 没改动！
-    应该改放到 comments 里："可在'满头大汗'后加'汗水湿透了衣服'。"
-- `improvement_edits`：3-12 条**提分修改**——这一轮的目的是教学生如何把
-  作文写得更好，达到更高分。每条同样要有 `original_span`（原作文中的
-  精确子串）、`suggested_replacement`（更出色的写法）、`reason`（解释
-  为什么这么改会提分，例如"用比喻让画面更生动"、"加感官描写让读者身临
-  其境"、"用更精准的动词代替'走'"、"补一句心理描写让人物更立体"等）。
-  `category` 仍用相同的枚举值。`suggested_replacement` 必须**真的不同**
+    `original_span`="巴工"
+    `suggested_replacement`="巴士"
+    `category`="character_error"
+
+  错误示例（**禁止**——这种应放到 improvement_edits）：
+    `original_span`="他跑得很快"
+    `suggested_replacement`="他像箭一样飞奔"
+    ← 这是写作风格提升，不是错别字／标点修正
+- `improvement_edits`：3-12 条**提分修改**——这是真正提升作文水平的环节。
+  把所有比"机械性修改"更高层次的改动都放在这里：用词升级、句式优化、
+  加比喻、加感官描写、加心理描写、加细节、改语法、调整段落连接等等。
+  每条要有 `original_span`（原作文中的精确子串）、`suggested_replacement`
+  （更出色的写法）、`reason`（解释为什么这么改会提分）、`category`
+  （任何 EditCategory 值都可以）。`suggested_replacement` 必须真的不同
   于 `original_span`。挑选不与 `tracked_edits` 重叠的原文片段。
 
   示例：
@@ -57,6 +63,11 @@
     `suggested_replacement`="他刚打完篮球，汗水顺着脸颊往下淌，T 恤都湿透了，又热又累。"
     `reason`="加感官细节，让'累'有画面感，提升内容分。"
     `category`="word_choice"
+
+    `original_span`="他没有座位所以他摇摇晃晃。"
+    `suggested_replacement`="他抓着扶手，随着公交车摇晃，脚下踉跄了好几次。"
+    `reason`="把'摇摇晃晃'扩成具体动作，画面更立体。"
+    `category`="sentence_structure"
 
 - `target_score`：**改进版的总分**。整数，至少 30 分，最多 max_total
   （华文 40）。这是**唯一**一个 target 字段——不要给 content 或 language

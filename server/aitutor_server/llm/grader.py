@@ -34,12 +34,13 @@ from aitutor_server.api.schemas import (
     RubricScores,
     TrackedEdit,
 )
-from aitutor_server.models.paths import LLM_FALLBACK_DIR
+from aitutor_server.models import manager as model_manager
 
 log = logging.getLogger(__name__)
 
 _PIPELINE_LOCK = threading.Lock()
 _PIPELINE: Any | None = None
+_PIPELINE_KEY: tuple[str] | None = None
 
 # Hard cap so a runaway model doesn't burn all day. ~1500 tokens is enough for
 # 30 tracked edits + 10 comments + scores + a 1200-char feedback paragraph.
@@ -49,55 +50,93 @@ _MAX_NEW_TOKENS = 1800
 # --- Public API ----------------------------------------------------------
 
 def grade(req: GradeRequest) -> GradeResponse:
-    """Grade an essay against the PSLE rubric using Qwen3-8B-Instruct on NPU.
-    The captioner (Qwen2.5-VL-7B on iGPU) is unloaded by ``_get_pipeline``
-    before the grader loads."""
+    """Grade an essay against the PSLE rubric. The model is picked from
+    ``req.language``:
+
+      * en: Gemma 3 4B-IT (VLMPipeline, shared with captioner)
+      * zh-Hans: Qwen3-8B (LLMPipeline, NPU)
+    """
     prompt = _build_prompt(req)
     schema = _grade_response_json_schema(req)
     log.info("grading: lang=%s paper=%s essay_len=%d question_len=%d",
-             req.language, req.paper_type, len(req.essay_text), len(req.question_text))
+             req.language, req.paper_type, len(req.essay_text),
+             len(req.question_text))
 
-    pipeline = _get_pipeline()
+    pipeline = _get_pipeline(req.language)
     raw = _generate_structured(pipeline, prompt, schema)
 
     log.info("grading: got %d chars of LLM output", len(raw))
     return _parse_and_validate(raw, req)
 
 
-def active_model_name() -> str:
-    return "Qwen3-8B-Instruct"
+def active_model_name(language: str = "zh-Hans") -> str:
+    return model_manager.route_for(language)["label"]
 
 
 def unload() -> None:
     """Free the grader from RAM (rarely needed -- the grader is the last
     model to load in a typical session)."""
-    global _PIPELINE
+    global _PIPELINE, _PIPELINE_KEY
     with _PIPELINE_LOCK:
         if _PIPELINE is not None:
             log.info("unloading grader")
             _PIPELINE = None
+            _PIPELINE_KEY = None
 
 
 # --- Pipeline lifecycle --------------------------------------------------
 
-def _get_pipeline() -> Any:
-    """Lazy-load the Qwen3-8B INT4 IR on the NPU. Unloads the captioner
-    first to keep peak RAM under 16 GB."""
-    global _PIPELINE
-    if _PIPELINE is not None:
+def _get_pipeline(language: str = "zh-Hans") -> Any:
+    """Lazy-load the right pipeline for the language.
+
+    EN: the captioner and grader are the same Gemma 3 4B-IT IR -- we share
+    the VLMPipeline instance to avoid double-loading the model and double-
+    paying the NPU compile cost.
+
+    ZH: dedicated LLMPipeline (Qwen3-8B INT4-cw) on NPU with the buffer-size
+    properties needed for full grader output.
+    """
+    global _PIPELINE, _PIPELINE_KEY
+    key = (language,)
+
+    route = model_manager.route_for(language)
+    same_as_captioner = route["captioner_dir"] == route["grader_dir"]
+
+    if same_as_captioner:
+        # Defer to the captioner's lazy loader; it caches a VLMPipeline that
+        # works for text-only generation as well. Free our own dedicated
+        # pipeline if one is loaded from a previous (ZH) route -- it's no
+        # longer needed and is competing for the 16 GB RAM budget.
+        if _PIPELINE is not None:
+            with _PIPELINE_LOCK:
+                if _PIPELINE is not None:
+                    log.info("entering shared-pipeline route; unloading dedicated grader (was %s)",
+                             _PIPELINE_KEY)
+                    _PIPELINE = None
+                    _PIPELINE_KEY = None
+        from aitutor_server.vision import captioner as cap_mod
+        return cap_mod._get_pipeline(language)
+
+    if _PIPELINE is not None and _PIPELINE_KEY == key:
         return _PIPELINE
     with _PIPELINE_LOCK:
-        if _PIPELINE is not None:
+        if _PIPELINE is not None and _PIPELINE_KEY == key:
             return _PIPELINE
+        if _PIPELINE is not None:
+            log.info("grader language changed (%s -> %s); unloading old pipeline",
+                     _PIPELINE_KEY, key)
+            _PIPELINE = None
 
-        if not (LLM_FALLBACK_DIR / "openvino_model.xml").exists():
+        grader_dir = route["grader_dir"]
+        device = route["grader_device"]
+
+        if not (grader_dir / "openvino_model.xml").exists():
             raise FileNotFoundError(
-                f"grader IR missing at {LLM_FALLBACK_DIR}; run "
-                "scripts/bootstrap_server.ps1 to fetch it"
+                f"grader IR missing for route={route['label']} at {grader_dir}; "
+                "run scripts/bootstrap_server.ps1 to fetch it"
             )
 
-        # Free the captioner BEFORE we load the grader -- otherwise we may OOM
-        # on a 16 GB system. Lazy import avoids a circular dep at module-load.
+        # Free the captioner before loading the grader on a 16 GB system.
         try:
             from aitutor_server.vision import captioner
             captioner.unload()
@@ -106,25 +145,19 @@ def _get_pipeline() -> Any:
 
         import openvino_genai
 
-        log.info("loading grader IR from %s on NPU...", LLM_FALLBACK_DIR)
-        # NPU's stateful LLM pipeline pre-allocates two fixed-size buffers at
-        # compile time:
-        #   MAX_PROMPT_LEN   -- input budget. Must cover system prompt +
-        #                       question + essay + chat-template overhead.
-        #   MIN_RESPONSE_LEN -- output budget. *This is what max_new_tokens
-        #                       cannot exceed at runtime.* If unset, recent
-        #                       openvino-genai builds default it to ~128-256
-        #                       tokens, which silently truncates the grader
-        #                       JSON mid-string with no error -- the symptom
-        #                       was an output that ended in the middle of a
-        #                       "reason" field at ~150 tokens.
-        # Both must be ints (string values trip a type-check error).
+        log.info("loading grader IR for route=%s from %s on %s...",
+                 route["label"], grader_dir, device)
+        # NPU stateful LLM pipeline buffer sizes -- MIN_RESPONSE_LEN must be
+        # large enough for the full structured grade JSON (~1500 tokens).
+        # See git history for the truncation incident this fixes.
         _PIPELINE = openvino_genai.LLMPipeline(
-            str(LLM_FALLBACK_DIR), "NPU",
+            str(grader_dir), device,
             MAX_PROMPT_LEN=4096,
             MIN_RESPONSE_LEN=2048,
         )
-        log.info("grader ready (NPU MAX_PROMPT_LEN=4096, MIN_RESPONSE_LEN=2048)")
+        _PIPELINE_KEY = key
+        log.info("grader ready (route=%s, MAX_PROMPT_LEN=4096, MIN_RESPONSE_LEN=2048)",
+                 route["label"])
         return _PIPELINE
 
 
@@ -145,25 +178,29 @@ def _build_prompt(req: GradeRequest) -> str:
             f"学生作文：\n{req.essay_text}\n\n"
             f"请按照评分细则评分，并按指定的 JSON 格式输出。"
         )
-    else:
-        paper = "Continuous Writing (36 marks)" if req.paper_type == "continuous" \
-                else "Situational Writing (14 marks)"
-        system = _read_prompt("grader_en.md")
-        user = (
-            f"Paper: PSLE English Paper 1 - {paper}\n\n"
-            f"Question:\n{req.question_text}\n\n"
-            f"Student's essay:\n{req.essay_text}\n\n"
-            f"Mark this essay against the rubric. Output JSON only."
+        # Qwen3 chat template
+        return (
+            "<|im_start|>system\n" + system.strip() + "<|im_end|>\n"
+            "<|im_start|>user\n" + user.strip() + "<|im_end|>\n"
+            "<|im_start|>assistant\n"
         )
 
-    # Qwen3 chat template: a short system block followed by the user turn.
-    # OpenVINO GenAI's LLMPipeline doesn't auto-apply a chat template; we
-    # build the turn boundaries explicitly. enable_thinking=False is enforced
-    # by NOT including the <think> trigger.
+    paper = "Continuous Writing (36 marks)" if req.paper_type == "continuous" \
+            else "Situational Writing (14 marks)"
+    system = _read_prompt("grader_en.md")
+    user = (
+        f"Paper: PSLE English Paper 1 - {paper}\n\n"
+        f"Question:\n{req.question_text}\n\n"
+        f"Student's essay:\n{req.essay_text}\n\n"
+        f"Mark this essay against the rubric. Output JSON only."
+    )
+    # Gemma 3 chat template -- has no separate system role; system text is
+    # concatenated into the user turn. <bos> is added by the tokenizer in
+    # OpenVINO GenAI, so we omit it here.
     return (
-        "<|im_start|>system\n" + system.strip() + "<|im_end|>\n"
-        "<|im_start|>user\n" + user.strip() + "<|im_end|>\n"
-        "<|im_start|>assistant\n"
+        "<start_of_turn>user\n"
+        + system.strip() + "\n\n" + user.strip()
+        + "<end_of_turn>\n<start_of_turn>model\n"
     )
 
 
@@ -180,7 +217,26 @@ def _grade_response_json_schema(req: GradeRequest) -> dict:
     else:
         content_max, language_max, total_max = 18, 18, 36
 
-    edit_item_schema = {
+    # Round 1 (tracked_edits) is MECHANICAL fixes only -- typos, punctuation,
+    # spelling. Grammar / structure / word-choice rewrites belong in Round 2
+    # so the student sees them in the "Improved Version" section, not as a
+    # blizzard of redlines on their original draft.
+    tracked_edit_item_schema = {
+        "type": "object",
+        "additionalProperties": False,
+        "required": ["original_span", "suggested_replacement", "reason", "category"],
+        "properties": {
+            "original_span":         {"type": "string", "minLength": 1, "maxLength": 200},
+            "occurrence_index":      {"type": "integer", "minimum": 0, "default": 0},
+            "suggested_replacement": {"type": "string", "minLength": 1, "maxLength": 200},
+            "reason":                {"type": "string", "minLength": 1, "maxLength": 160},
+            "category":              {"enum": ["spelling", "punctuation", "character_error"]},
+        },
+    }
+
+    # Round 2 (improvement_edits) accepts the full EditCategory enum since
+    # any kind of upgrade is fair game when the goal is to lift the score.
+    improvement_edit_item_schema = {
         "type": "object",
         "additionalProperties": False,
         "required": ["original_span", "suggested_replacement", "reason", "category"],
@@ -215,8 +271,8 @@ def _grade_response_json_schema(req: GradeRequest) -> dict:
                     "band":      {"type": "integer", "minimum": 1, "maximum": 5},
                 },
             },
-            "tracked_edits":     {"type": "array", "maxItems": 30, "items": edit_item_schema},
-            "improvement_edits": {"type": "array", "maxItems": 15, "items": edit_item_schema},
+            "tracked_edits":     {"type": "array", "maxItems": 30, "items": tracked_edit_item_schema},
+            "improvement_edits": {"type": "array", "maxItems": 15, "items": improvement_edit_item_schema},
             "target_score": {
                 "type": "number",
                 "minimum": min(target_floor, total_max),

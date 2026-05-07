@@ -38,6 +38,10 @@ log = logging.getLogger(__name__)
 
 _PIPELINE_LOCK = threading.Lock()
 _PIPELINE: Any | None = None
+# Keyed by (captioner_dir, captioner_device) so toggling the Fast checkbox
+# in the dialog (which only affects the GRADER on the ZH routes) doesn't
+# trigger a captioner reload.
+_PIPELINE_KEY: tuple[str, str] | None = None
 
 
 # --- Prompts -------------------------------------------------------------
@@ -129,7 +133,7 @@ def transcribe_question_page(bgr: np.ndarray, language: Language,
     baked into the prompt). Returns empty string on error.
     """
     try:
-        pipeline = _get_pipeline()
+        pipeline = _get_pipeline(language)
         prompt = _QUESTION_PROMPT_ZH if language == "zh-Hans" else _QUESTION_PROMPT_EN
         rgb = _bgr_to_rgb(bgr)
         log.info("VLM question page (lang=%s, %dx%d)",
@@ -159,15 +163,8 @@ def transcribe_question_pages(bgrs: list[np.ndarray], language: Language,
 
 def transcribe_essay_page(bgr: np.ndarray, language: Language,
                           max_new_tokens: int = 1500) -> str:
-    """Verbatim transcription of a single handwritten essay page.
-
-    Replaces paddleocr for handwriting OCR. We trade a specialised OCR engine
-    for a general-purpose VLM, accepting somewhat worse character-level
-    accuracy in return for the pipeline actually finishing on Lunar Lake. The
-    user reviews + corrects the transcription in Writer before grading
-    anyway, so OCR errors are recoverable.
-    """
-    pipeline = _get_pipeline()
+    """Verbatim transcription of a single handwritten essay page."""
+    pipeline = _get_pipeline(language)
     prompt = _ESSAY_PROMPT_ZH if language == "zh-Hans" else _ESSAY_PROMPT_EN
     rgb = _bgr_to_rgb(bgr)
     log.info("VLM essay page (lang=%s, %dx%d)",
@@ -194,32 +191,53 @@ def transcribe_essay_pages(bgrs: list[np.ndarray], language: Language,
 
 # --- Implementation ------------------------------------------------------
 
-def _get_pipeline() -> Any:
-    """Lazy-load the OpenVINO GenAI VLMPipeline (Qwen2.5-VL-7B) on iGPU."""
-    global _PIPELINE
-    if _PIPELINE is not None:
+def _get_pipeline(language: str = "zh-Hans") -> Any:
+    """Lazy-load the VLMPipeline for the language route. Cache key is
+    (captioner_dir, captioner_device)."""
+    global _PIPELINE, _PIPELINE_KEY
+    route = model_manager.route_for(language)
+    captioner_dir = route["captioner_dir"]
+    device = route["captioner_device"]
+    key = (str(captioner_dir), device)
+
+    if _PIPELINE is not None and _PIPELINE_KEY == key:
         return _PIPELINE
     with _PIPELINE_LOCK:
-        if _PIPELINE is not None:
+        if _PIPELINE is not None and _PIPELINE_KEY == key:
             return _PIPELINE
+        if _PIPELINE is not None:
+            log.info("captioner changed (%s -> %s); unloading old pipeline",
+                     _PIPELINE_KEY, key)
+            _PIPELINE = None
 
-        captioner_dir = model_manager.active_captioner_dir()
         ir_present = (
             (captioner_dir / "openvino_language_model.xml").exists()
             or (captioner_dir / "openvino_model.xml").exists()
         )
         if not ir_present:
             raise FileNotFoundError(
-                f"captioner IR missing at {captioner_dir}; "
-                "run scripts/bootstrap_server.ps1 to fetch + convert"
+                f"captioner IR missing for route={route['label']} at {captioner_dir}; "
+                "run scripts/bootstrap_server.ps1 to fetch it"
             )
 
         # Lazy import - openvino_genai is heavy.
         import openvino_genai
 
-        log.info("loading captioner IR from %s on GPU...", captioner_dir)
-        _PIPELINE = openvino_genai.VLMPipeline(str(captioner_dir), "GPU")
-        log.info("captioner ready")
+        log.info("loading captioner IR for route=%s from %s on %s...",
+                 route["label"], captioner_dir, device)
+        # On NPU the stateful VLMPipeline defaults to MAX_PROMPT_LEN=1024,
+        # which the Chinese question prompt + image embeddings blow past
+        # (~1250 tokens). The iGPU path doesn't need or accept these props.
+        if device == "NPU":
+            _PIPELINE = openvino_genai.VLMPipeline(
+                str(captioner_dir), device,
+                MAX_PROMPT_LEN=4096,
+                MIN_RESPONSE_LEN=2048,
+            )
+        else:
+            _PIPELINE = openvino_genai.VLMPipeline(str(captioner_dir), device)
+        _PIPELINE_KEY = key
+        log.info("captioner ready (route=%s, device=%s)", route["label"], device)
         return _PIPELINE
 
 
@@ -260,10 +278,11 @@ def _run(pipeline: Any, prompt: str, rgb: np.ndarray, max_new_tokens: int) -> st
 def unload() -> None:
     """Free the captioner from RAM. Call between /transcribe and /grade if memory pressure
     on a 16 GB system requires it. Subsequent transcribe_*() calls reload lazily."""
-    global _PIPELINE
+    global _PIPELINE, _PIPELINE_KEY
     with _PIPELINE_LOCK:
         if _PIPELINE is not None:
             log.info("unloading captioner")
             _PIPELINE = None
+            _PIPELINE_KEY = None
 
 

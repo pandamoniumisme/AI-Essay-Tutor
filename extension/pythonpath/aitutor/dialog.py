@@ -79,7 +79,8 @@ class TranscribeInputDialog:
 
     def __init__(self, ctx):
         self.ctx = ctx
-        self.language = self.LANGUAGE_EN
+        # Default to Chinese -- this is the primary use case for the user.
+        self.language = self.LANGUAGE_ZH
         # Per-slot paths: index 0 = page 1, etc. None = empty.
         self.question_paths: list[str | None] = [None] * self.MAX_PAGES
         self.essay_paths: list[str | None] = [None] * self.MAX_PAGES
@@ -90,7 +91,7 @@ class TranscribeInputDialog:
     def execute(self) -> tuple[str, list[str], list[str], bool] | None:
         """Show the dialog. Returns (language, question_paths, essay_paths,
         debug) on Submit (paths are non-empty, in user-chosen page order;
-        debug is True if the user ticked the debug checkbox). Returns None
+        debug is True if the user ticked the Debug checkbox). Returns None
         on Cancel."""
         ctx = self.ctx
         smgr = _smgr(ctx)
@@ -98,7 +99,7 @@ class TranscribeInputDialog:
         model = smgr.createInstanceWithContext(
             "com.sun.star.awt.UnoControlDialogModel", ctx
         )
-        # Dialog shape sized for MAX_PAGES=4 per side, plus a debug row at the bottom.
+        # Dialog shape sized for MAX_PAGES=4 per side, debug row at the bottom.
         model.Width = 360
         model.Height = 308
         model.Title = "Compo Tutor"
@@ -108,11 +109,11 @@ class TranscribeInputDialog:
         rb_en = self._add(model, "com.sun.star.awt.UnoControlRadioButtonModel",
                           "lang_en", 70, 4, 80, 12)
         rb_en.Label = "English"
-        rb_en.State = 1  # selected by default
+        rb_en.State = 0
         rb_zh = self._add(model, "com.sun.star.awt.UnoControlRadioButtonModel",
                           "lang_zh", 160, 4, 180, 12)
         rb_zh.Label = "Simplified Chinese (简体中文)"
-        rb_zh.State = 0
+        rb_zh.State = 1  # default to Chinese
 
         # --- Question pages section ---
         self._add_label(model, "q_section", 6, 26, 200, 10,

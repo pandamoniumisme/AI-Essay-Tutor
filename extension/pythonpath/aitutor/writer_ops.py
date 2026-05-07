@@ -397,8 +397,10 @@ def _insert_improved_version_section(
     body.insertControlCharacter(cursor, PARAGRAPH_BREAK, False)
 
     # Bookmark at section start so findNext can scope subsequent searches.
+    # XBookmark exposes Name via XNamed (setName / direct attribute), NOT via
+    # XPropertySet -- setPropertyValue("Name", ...) raises "Property is read-only".
     bookmark = doc.createInstance("com.sun.star.text.Bookmark")
-    bookmark.setPropertyValue("Name", V2_BOOKMARK_NAME)
+    bookmark.Name = V2_BOOKMARK_NAME
     body.insertTextContent(cursor, bookmark, False)
 
     # Section B body: v1-corrected essay text (paragraph-broken).
