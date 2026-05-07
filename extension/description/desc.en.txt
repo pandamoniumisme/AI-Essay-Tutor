@@ -1,0 +1,6 @@
+AI Essay Tutor — local PSLE composition grader for English and Simplified Chinese.
+
+Photograph the question and the handwritten essay; the extension transcribes
+the essay into Writer, scores it against the PSLE rubric, and inserts
+tracked-change corrections plus comments. Runs entirely on your machine using
+the AI server installed alongside this extension (no cloud, no telemetry).

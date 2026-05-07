@@ -1,0 +1,36 @@
+# Build output
+dist/
+*.oxt
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Virtual envs (server venv lives in %LOCALAPPDATA% but devs may also use a local one)
+.venv/
+venv/
+
+# Models cache (lives in %LOCALAPPDATA% normally, but in case of local override)
+models/
+*.gguf
+*.bin
+*.onnx
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Manual test outputs
+tests/_output/
+
+# Local config that shouldn't be committed
+*.local.json

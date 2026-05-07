@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<description
+    xmlns="http://openoffice.org/extensions/description/2006"
+    xmlns:xlink="http://www.w3.org/1999/xlink"
+    xmlns:dep="http://openoffice.org/extensions/description/2006">
+  <identifier value="org.aitutor.AIEssayTutor"/>
+  <version value="0.1.0"/>
+  <display-name>
+    <name xml:lang="en">AI Essay Tutor</name>
+  </display-name>
+  <publisher>
+    <name xml:lang="en" xlink:href="https://github.com/aitutor">AI Essay Tutor</name>
+  </publisher>
+  <extension-description>
+    <src xml:lang="en" xlink:href="description/desc.en.txt"/>
+  </extension-description>
+  <dependencies>
+    <dep:OpenOffice.org-minimal-version value="4.1" dep:name="OpenOffice 4.1 / LibreOffice 7.6+"/>
+  </dependencies>
+  <platform value="windows_x86_64"/>
+</description>
