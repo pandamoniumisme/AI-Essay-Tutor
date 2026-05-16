@@ -43,31 +43,44 @@ Return ONLY a JSON object matching the supplied schema. No surrounding prose.
 - `scores.total`: equals content + language.
 - `scores.max_total`: 36 (continuous) or 14 (situational).
 - `scores.band`: integer 1-5 mapped from the percentage above.
-- `tracked_edits`: **mechanical fixes ONLY** -- spelling, punctuation,
-  obvious typos. `category` MUST be one of `spelling`, `punctuation`, or
-  `character_error`. `original_span` is an exact substring of the essay;
-  `suggested_replacement` MUST differ from it.
+- `tracked_edits`: **objective mechanical errors ONLY** -- spelling,
+  punctuation, obvious typos, clearly broken grammar. `category` MUST be
+  one of `spelling`, `punctuation`, or `character_error`. `original_span`
+  is an exact substring of the essay; `suggested_replacement` MUST differ
+  from it.
 
-  Style, word-choice, grammar rewrites, sentence-structure improvements,
-  sensory detail -- all of those go into `improvement_edits` instead.
-  Round 1's job is to keep the redlines on the original draft to a
-  minimum: just the small errors the student would correct on a re-read.
+  **The hard test: ask "is the original *wrong*?"** Only put it here if
+  the original is objectively incorrect (misspelt, missing punctuation,
+  ungrammatical). If the original is correct and merely *could be better*
+  (stronger word, added imagery, varied sentences, more vivid phrasing),
+  it does NOT belong in `tracked_edits` -- it goes in `improvement_edits`,
+  no matter how small the change looks or how much you want to make it.
+  The `spelling`/`punctuation`/`character_error` categories are ONLY for
+  real errors; never use them to label a stylistic upgrade.
 
-  Correct example (mechanical):
+  Count expectation: a typical essay has only **0-5** genuine mechanical
+  errors. If you find yourself wanting many entries here, you are almost
+  certainly mis-filing score-lifting edits -- move them to
+  `improvement_edits`.
+
+  Correct examples (the original is genuinely wrong):
     `original_span`="recieve"
     `suggested_replacement`="receive"
-    `category`="spelling"
+    `category`="spelling"   <- misspelt, objectively wrong
 
     `original_span`="however he ran"
     `suggested_replacement`="however, he ran"
-    `category`="punctuation"
+    `category`="punctuation"   <- missing comma, objectively wrong
 
-  Wrong example (FORBIDDEN -- belongs in improvement_edits):
+  FORBIDDEN here (original is NOT wrong, just weak -> improvement_edits):
     `original_span`="he ran fast"
     `suggested_replacement`="he sprinted, the wind stinging his eyes"
-    <- this is a stylistic upgrade, not a typo fix
-- `improvement_edits`: 3-12 **score-lifting edits** -- this is the round
-  that does the real teaching. Anything beyond mechanical fixes goes here:
+    <- "he ran fast" is grammatically fine with no spelling/punctuation
+      error. Upgrading it is a score-lifting edit; it belongs in
+      `improvement_edits`. Labelling it `spelling` would be wrong.
+- `improvement_edits`: **at least 5, up to 12 score-lifting edits** --
+  this is the round that does the real teaching and is normally the
+  LARGEST edit list. Anything beyond fixing an outright error goes here:
   word-choice upgrades, stronger verbs, metaphors, sensory detail, mental/
   emotional beats, sentence-structure improvements, paragraph-level
   organisation tweaks, grammar rewrites that change phrasing rather than
@@ -76,7 +89,8 @@ Return ONLY a JSON object matching the supplied schema. No surrounding prose.
   `suggested_replacement` (a stronger version), `reason` (why this lifts
   the score), and `category` (any EditCategory value is fine).
   `suggested_replacement` MUST differ from `original_span`. Pick spans
-  that DON'T overlap with `tracked_edits`.
+  that DON'T overlap with `tracked_edits`. Do not put spelling/punctuation
+  typo fixes here.
 
   Examples:
     `original_span`="He ran fast to the field."
@@ -89,12 +103,26 @@ Return ONLY a JSON object matching the supplied schema. No surrounding prose.
     `reason`="Show, don't tell -- a concrete action carries more emotion than 'happy'."
     `category`="sentence_structure"
 
-- `target_score`: **the total score** the improved version should reach.
-  Integer, at least 30 and at most max_total (36 for continuous, 14 for
-  situational). This is the *only* target field -- do NOT set per-component
-  targets for content or language. The improved version must genuinely
-  reach this total, so `improvement_edits` must be enough in number and
-  substance to get there.
+**How the three scores relate (important -- reason about it this way):**
+`scores.total` is the draft's score *as written* -- you already deducted
+marks for its errors and weaknesses while grading, so it already reflects
+the draft's problems; do not penalise the same errors twice.
+
+- `score_after_v1`: the score the essay would get if **only** the
+  objective errors in `tracked_edits` were fixed and nothing else changed.
+  It equals `scores.total` plus just the marks currently lost purely to
+  spelling/punctuation/grammar errors -- so it is usually only **slightly
+  higher than `scores.total` (+0 to +2)**, and may equal `scores.total`
+  if the draft has almost no mechanical errors. It must be >=
+  `scores.total` and <= `target_score`.
+- `target_score`: the predicted total after **also** applying
+  `improvement_edits` -- this is where the real gain comes from. Integer,
+  **at least 32** and at most max_total (36 for continuous, 14 for
+  situational). This is the only final-target field -- do NOT set
+  per-component targets for content or language. The improved version
+  must genuinely reach this total, so `improvement_edits` must be enough
+  in number and substance to get there. The score lift is driven by
+  `improvement_edits`, not `tracked_edits`.
 - `comments` (optional, may be `[]`): free-standing remarks NOT tied to
   any edit. The earlier "6-12 comments" minimum has been dropped. Only
   include a comment when there's praise worth giving for a genuinely

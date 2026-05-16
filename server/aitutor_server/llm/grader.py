@@ -251,12 +251,12 @@ def _grade_response_json_schema(req: GradeRequest) -> dict:
 
     # Floor for target_score. Cap at total_max so EN-situational (max 14)
     # doesn't get an unreachable target.
-    target_floor = min(30, total_max)
+    target_floor = min(32, total_max)
     return {
         "type": "object",
         "additionalProperties": False,
         "required": ["scores", "tracked_edits", "improvement_edits",
-                     "target_score", "overall_feedback"],
+                     "score_after_v1", "target_score", "overall_feedback"],
         "properties": {
             "scores": {
                 "type": "object",
@@ -273,6 +273,11 @@ def _grade_response_json_schema(req: GradeRequest) -> dict:
             },
             "tracked_edits":     {"type": "array", "maxItems": 30, "items": tracked_edit_item_schema},
             "improvement_edits": {"type": "array", "maxItems": 15, "items": improvement_edit_item_schema},
+            "score_after_v1": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": total_max,
+            },
             "target_score": {
                 "type": "number",
                 "minimum": min(target_floor, total_max),
@@ -520,14 +525,23 @@ def _parse_and_validate(raw: str, req: GradeRequest) -> GradeResponse:
 
     target_score = data.get("target_score")
     if target_score is not None:
-        floor = min(30.0, float(max_total_expected))
+        floor = min(32.0, float(max_total_expected))
         target_score = max(float(target_score), floor, float(scores.total))
         target_score = min(target_score, float(max_total_expected))
+
+    score_after_v1 = data.get("score_after_v1")
+    if score_after_v1 is not None:
+        # Round 1 is mechanical fixes only -- the bump should be modest and
+        # never exceed the Round 2 target. Clamp to [scores.total, target].
+        upper = target_score if target_score is not None else float(max_total_expected)
+        score_after_v1 = max(float(score_after_v1), float(scores.total))
+        score_after_v1 = min(score_after_v1, float(upper))
 
     return GradeResponse(
         scores=scores,
         tracked_edits=edits_kept,
         improvement_edits=imp_kept,
+        score_after_v1=score_after_v1,
         target_score=target_score,
         comments=comments_kept,
         overall_feedback=str(data.get("overall_feedback", "")).strip(),

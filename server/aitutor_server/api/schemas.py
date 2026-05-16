@@ -108,8 +108,14 @@ class GradeResponse(BaseModel):
     # Round 2: score-lifting improvements applied to the v1-corrected essay.
     # Each edit's ``reason`` explains *why* the change would lift the score.
     improvement_edits: list[TrackedEdit] = Field(default_factory=list, max_length=20)
-    # The score the v2 (improved) version aims for. Must be >= 25 and
-    # <= max_total. The LLM picks based on what's plausibly achievable.
+    # Predicted total score after applying ONLY the Round 1 mechanical
+    # fixes. Falls between scores.total and target_score. Surfaced in the
+    # score-report table so the student sees what the Round 1 fixes
+    # actually buy them.
+    score_after_v1: float | None = Field(default=None, ge=0)
+    # Predicted total score after applying both Round 1 and Round 2 edits.
+    # Must be >= 32 and <= max_total. The LLM picks based on what's
+    # plausibly achievable.
     target_score: float | None = Field(default=None, ge=0)
     # Free-form remarks unattached to any specific edit. No longer required
     # by the prompt; kept optional for backwards-compat / praise comments.

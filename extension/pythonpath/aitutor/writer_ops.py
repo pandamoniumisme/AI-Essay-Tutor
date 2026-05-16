@@ -80,9 +80,11 @@ def apply_grade_to_doc(ctx, grade_body: dict, essay_text: str) -> ApplyResult:
 
     scores = grade_body.get("scores") or {}
     feedback = grade_body.get("overall_feedback") or ""
+    score_after_v1 = grade_body.get("score_after_v1")
+    target_score = grade_body.get("target_score")
     if scores or feedback:
         try:
-            _insert_score_report(doc, scores, feedback)
+            _insert_score_report(doc, scores, feedback, score_after_v1, target_score)
             result.score_report_inserted = True
         except Exception as e:
             log.exception("score-report insert failed")
@@ -90,7 +92,6 @@ def apply_grade_to_doc(ctx, grade_body: dict, essay_text: str) -> ApplyResult:
 
     tracked_edits = grade_body.get("tracked_edits") or []
     improvement_edits = grade_body.get("improvement_edits") or []
-    target_score = grade_body.get("target_score")
 
     # If the LLM provided improvement_edits, append the "Improved Version"
     # section now -- still BEFORE we toggle RecordChanges on, so neither the
@@ -299,11 +300,12 @@ def _insert_essay_text(doc, essay_text: str) -> None:
             body.insertString(cursor, para, False)
 
 
-def _insert_score_report(doc, scores: dict, overall_feedback: str) -> None:
+def _insert_score_report(doc, scores: dict, overall_feedback: str,
+                         score_after_v1=None, target_score=None) -> None:
     """Append a heading + 2-column score table + overall-feedback paragraph
     to the end of the doc. Called before RecordChanges is enabled so the
     report isn't rendered as a giant tracked insertion."""
-    rows = _score_table_rows(scores)
+    rows = _score_table_rows(scores, score_after_v1, target_score)
     body = doc.getText()
     cursor = body.createTextCursorByRange(body.getEnd())
 
@@ -332,7 +334,8 @@ def _insert_score_report(doc, scores: dict, overall_feedback: str) -> None:
                 body.insertString(cursor, para, False)
 
 
-def _score_table_rows(scores: dict) -> list[tuple[str, str]]:
+def _score_table_rows(scores: dict, score_after_v1=None,
+                      target_score=None) -> list[tuple[str, str]]:
     """Build the (label, value) row list for the score table. Returns []
     if there's nothing meaningful to show."""
     if not scores:
@@ -363,7 +366,11 @@ def _score_table_rows(scores: dict) -> list[tuple[str, str]]:
     if scores.get("organization") is not None:
         rows.append(("Organization", fmt(scores["organization"], None)))
     if scores.get("total") is not None:
-        rows.append(("Total", fmt(scores["total"], max_total)))
+        rows.append(("Total (original)", fmt(scores["total"], max_total)))
+    if score_after_v1 is not None:
+        rows.append(("After Round 1 fixes", fmt(score_after_v1, max_total)))
+    if target_score is not None:
+        rows.append(("After Round 2 improvements", fmt(target_score, max_total)))
     # Band is intentionally omitted from the table -- the total score and
     # max_total already convey the same information visually, and the band
     # number on its own can read as a harsh judgement to a primary student.

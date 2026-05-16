@@ -14,8 +14,9 @@ __pycache__/
 .venv/
 venv/
 
-# Models cache (lives in %LOCALAPPDATA% normally, but in case of local override)
-models/
+# Models cache (lives in %LOCALAPPDATA% normally, but in case of local override).
+# Root-anchored so it doesn't swallow the aitutor_server.models source package.
+/models/
 *.gguf
 *.bin
 *.onnx
