@@ -32,6 +32,21 @@ class SchemaAndLangTest {
     }
 
     @Test
+    fun onlineProviderUrls() {
+        assertEquals(OnlineProvider.GEMINI, OnlineProvider.from("gemini"))
+        assertEquals(OnlineProvider.DASHSCOPE, OnlineProvider.from("dashscope"))
+        assertEquals(OnlineProvider.GEMINI, OnlineProvider.from(null))  // default
+        assertEquals(
+            "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
+            OnlineProvider.GEMINI.chatUrl(),
+        )
+        assertEquals(
+            "https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions",
+            OnlineProvider.DASHSCOPE.chatUrl(),
+        )
+    }
+
+    @Test
     fun langDetect() {
         assertEquals("zh-Hans", LangDetect.detect("小明去学校"))
         assertEquals("en", LangDetect.detect("hello world this is english"))

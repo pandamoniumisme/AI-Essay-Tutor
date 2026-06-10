@@ -151,10 +151,24 @@ function renderCapture() {
       }),
       text);
 
+  const settings = api.getSettings();   // null on the web build
+  let privacy;
+  if (settings && !settings.online) {
+    privacy = "Everything stays on your device — nothing is uploaded.";
+  } else {
+    const label = providerLabel((settings && settings.provider) || null);
+    privacy = `Photos and text are sent to ${label} for processing.`;
+  }
+
+  const actions = h("div", { class: "actions" },
+    h("button", { class: "primary", onclick: onTranscribe }, "Transcribe"));
+  if (api.hasSettings()) {
+    actions.appendChild(h("button", { onclick: renderSettings }, "⚙ Settings"));
+  }
+
   root.appendChild(h("section", { class: "card" },
     h("h2", {}, "1. Capture"),
-    h("p", { class: "privacy" },
-      "Photos and text are sent to Google Gemini for processing."),
+    h("p", { class: "privacy" }, privacy),
     h("div", { class: "lang-row" },
       h("span", {}, "Language:"),
       langRadio("zh-Hans", "简体中文"),
@@ -162,8 +176,76 @@ function renderCapture() {
     enOnly,
     fileSlot("Question pages (in order)", "question"),
     fileSlot("Essay pages (in order)", "essay"),
+    actions));
+}
+
+function providerLabel(id) {
+  if (id === "dashscope") return "Alibaba Cloud (Qwen)";
+  if (id === "gemini") return "Gemini";
+  return "your configured AI provider";
+}
+
+// --- settings screen (Android only) --------------------------------------
+
+function renderSettings() {
+  const root = app();
+  clear(root);
+  const s = api.getSettings() || { online: false, provider: "gemini", geminiKey: "", dashscopeKey: "", geminiModel: "", dashscopeModel: "" };
+
+  const onlineBlock = h("div", { class: "online-block" + (s.online ? "" : " hidden") });
+  const keyInput = h("input", { type: "password", class: "edit", placeholder: "Paste API key" });
+  const modelInput = h("input", { type: "text", class: "edit" });
+  const providerSel = h("select", {
+    onchange: (e) => { s.provider = e.target.value; syncProviderFields(); },
+  },
+    h("option", { value: "gemini", selected: s.provider === "gemini" }, "Gemini"),
+    h("option", { value: "dashscope", selected: s.provider === "dashscope" }, "Alibaba Cloud (Qwen)"));
+
+  function syncProviderFields() {
+    const isDash = s.provider === "dashscope";
+    keyInput.value = isDash ? s.dashscopeKey : s.geminiKey;
+    modelInput.value = isDash ? s.dashscopeModel : s.geminiModel;
+    modelInput.placeholder = isDash ? "qwen3.5-flash" : "gemini-3.5-flash";
+  }
+  keyInput.addEventListener("input", () => {
+    if (s.provider === "dashscope") s.dashscopeKey = keyInput.value; else s.geminiKey = keyInput.value;
+  });
+  modelInput.addEventListener("input", () => {
+    if (s.provider === "dashscope") s.dashscopeModel = modelInput.value; else s.geminiModel = modelInput.value;
+  });
+  syncProviderFields();
+
+  onlineBlock.appendChild(h("label", {}, "Provider"));
+  onlineBlock.appendChild(providerSel);
+  onlineBlock.appendChild(h("label", {}, "API key"));
+  onlineBlock.appendChild(keyInput);
+  onlineBlock.appendChild(h("label", {}, "Model (optional)"));
+  onlineBlock.appendChild(modelInput);
+  onlineBlock.appendChild(h("p", { class: "hint" }, "Essays are sent to this provider when online."));
+
+  const modeRadio = (online, text, sub) =>
+    h("label", { class: "radio mode" },
+      h("input", {
+        type: "radio", name: "mode", checked: s.online === online,
+        onchange: () => { s.online = online; onlineBlock.classList.toggle("hidden", !online); },
+      }),
+      h("span", {}, text), sub ? h("span", { class: "hint" }, " " + sub) : null);
+
+  root.appendChild(h("section", { class: "card" },
+    h("h2", {}, "Settings"),
+    h("div", {}, modeRadio(false, "On-device (offline)", "— private, slower")),
+    h("div", {}, modeRadio(true, "Online provider", "— faster, sends data out")),
+    onlineBlock,
     h("div", { class: "actions" },
-      h("button", { class: "primary", onclick: onTranscribe }, "Transcribe"))));
+      h("button", { onclick: renderCapture }, "← Back"),
+      h("button", {
+        class: "primary",
+        onclick: () => {
+          api.saveSettings(s);
+          refreshHealth();
+          renderCapture();
+        },
+      }, "Save"))));
 }
 
 async function onTranscribe() {

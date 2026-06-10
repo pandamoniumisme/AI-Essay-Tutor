@@ -38,6 +38,16 @@ class AndroidBridge(
     @JavascriptInterface
     fun health(): String = inference.health()
 
+    /** Current settings (mode, provider, keys, models) as JSON. */
+    @JavascriptInterface
+    fun getSettings(): String =
+        Settings.toJson(Settings.load(webView.context.applicationContext))
+
+    /** Persist a (partial) settings JSON from the Settings screen. */
+    @JavascriptInterface
+    fun setSettings(payloadJson: String) =
+        Settings.save(webView.context.applicationContext, payloadJson)
+
     private fun run(token: String, work: suspend () -> String) {
         val ctx = webView.context.applicationContext
         scope.launch {

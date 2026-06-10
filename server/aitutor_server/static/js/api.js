@@ -77,6 +77,11 @@ export async function health() {
   return r.json();
 }
 
+// Settings (Android only — the web build is configured server-side via env).
+export function hasSettings() { return !!bridge(); }
+export function getSettings() { return bridge() ? JSON.parse(bridge().getSettings()) : null; }
+export function saveSettings(patch) { if (bridge()) bridge().setSettings(JSON.stringify(patch)); }
+
 /**
  * @param {File[]} questionFiles @param {File[]} essayFiles @param {string} language
  */
