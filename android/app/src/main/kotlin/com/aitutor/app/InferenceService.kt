@@ -36,7 +36,7 @@ class InferenceService : Service() {
 
     private fun notification(msg: String): Notification =
         NotificationCompat.Builder(this, CHANNEL)
-            .setContentTitle("AI Essay Tutor")
+            .setContentTitle("PSLE Compo Tutor")
             .setContentText(msg)
             .setSmallIcon(android.R.drawable.stat_sys_download)
             .setOngoing(true)
