@@ -19,13 +19,10 @@ enum class ModelChoice(
 }
 
 object ModelAdvisor {
-    private const val GIB = 1024L * 1024 * 1024
-
-    // A "12 GB" phone reports a bit less than 12 GiB of totalMem because some
-    // RAM is reserved (firmware/GPU), so comparing against a strict 12 GiB would
-    // misclassify real 12 GB devices as low-RAM. Use 11 GiB as the 12-GB-class
-    // cutoff. Raise to 12 if you want a stricter rule.
-    const val HIGH_RAM_THRESHOLD_BYTES = 11L * GIB
+    // 10.5 GiB cutoff for the 4B model. A "12 GB" phone reports only ~10.9 GiB
+    // of totalMem (firmware/GPU reserve some), so 10.5 puts 12-GB-class devices
+    // on 4B while 8-GB devices (~7.4 GiB) stay on 2B. (= 10.5 * 1024^3 bytes.)
+    const val HIGH_RAM_THRESHOLD_BYTES = 11_274_289_152L
 
     fun recommend(totalRamBytes: Long): ModelChoice =
         if (totalRamBytes >= HIGH_RAM_THRESHOLD_BYTES) ModelChoice.QWEN_4B else ModelChoice.QWEN_2B

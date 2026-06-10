@@ -70,16 +70,9 @@ async function refreshHealth() {
   try {
     const hh = await api.health();
     if (hh.on_device) {
-      // On-device build: show the RAM-based model recommendation at setup,
-      // before any download.
+      // Keep the header minimal — RAM + model recommendation live in Settings.
       el.className = "health ok";
-      if (hh.model_ready) {
-        el.textContent = `on-device · ${hh.model}`;
-      } else {
-        const rec = hh.recommended_model_name
-          ? ` · recommended ${hh.recommended_model_name} (~${hh.recommended_download_gb} GB)` : "";
-        el.textContent = `device ${hh.ram_gb} GB${rec} · model not downloaded`;
-      }
+      el.textContent = "On-device";
     } else if (hh.key_present) {
       el.className = "health ok";
       el.textContent = `${hh.provider_label || hh.provider} · ${hh.model}`;

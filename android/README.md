@@ -28,11 +28,11 @@ a plain JVM — that's where the risky ported logic is verified.
 ## Model recommendation at setup
 
 Before any download, setup reads the device's total RAM (`DeviceRam`) and
-recommends a model (`core/ModelAdvisor`): **< 12 GB-class → Qwen3.5-2B**,
-otherwise **Qwen3.5-4B**. The cutoff is 11 GiB of reported `totalMem` (a 12 GB
-phone reports ~11.x GiB because some RAM is reserved). The recommendation
-appears in the setup banner (and drives which GGUF the Phase-4 downloader
-fetches). The Z Flip 5's 8 GB lands on 2B. `ModelAdvisor` is unit-tested.
+recommends a model (`core/ModelAdvisor`): **Qwen3.5-4B** when reported
+`totalMem` ≥ **10.5 GiB**, otherwise **Qwen3.5-2B** (a "12 GB" phone reports
+~10.9 GiB; an 8 GB phone ~7.4 GiB). The recommendation drives the default
+download; the user can override it (Auto / 2B / 4B) in **Settings**.
+`ModelAdvisor` is unit-tested.
 
 ## Status
 
