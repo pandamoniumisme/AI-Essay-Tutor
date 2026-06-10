@@ -1,31 +1,20 @@
 #requires -Version 5.1
 <#
 .SYNOPSIS
-  One-time setup: create the AI server venv, install dependencies, fetch models.
+  One-time setup: create the server venv and install dependencies.
 
 .DESCRIPTION
-  Creates a Python venv at %LOCALAPPDATA%\AIEssayTutor\venv, installs the
-  server package (editable, so the developer can edit C:\AI-Essay-Tutor\server\
-  in place), and runs the model manager to snapshot-download three
-  pre-converted OpenVINO IRs:
-    en (both jobs) : OpenVINO/gemma-3-4b-it-int4-cw-ov       (~2.5 GB, gated)
-    zh captioner   : OpenVINO/Qwen2.5-VL-7B-Instruct-int4-ov (~5 GB)
-    zh grader      : OpenVINO/Qwen3-8B-int4-cw-ov            (~4.5 GB)
-
-  Total fresh download is ~12 GB; expect 10-25 minutes on broadband.
-
-.PARAMETER SkipModels
-  Skip the models.manager fetch step. Use this when re-running bootstrap
-  after a code-only change.
+  Creates a Python venv at %LOCALAPPDATA%\AIEssayTutor\venv and installs the
+  server package (editable, so the developer can edit the server\ tree in
+  place). Inference is delegated to the Gemini API, so there is NO multi-GB
+  model download anymore -- just set a GEMINI_API_KEY (see the end of this
+  script) and run the dev server.
 
 .EXAMPLE
   .\scripts\bootstrap_server.ps1
-  .\scripts\bootstrap_server.ps1 -SkipModels
 #>
 [CmdletBinding()]
-param(
-    [switch]$SkipModels
-)
+param()
 
 $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
@@ -130,17 +119,15 @@ Write-Host "`nInstalling server package (editable)..."
 & $venvPython -m pip install --editable (Join-Path $repoRoot "server")
 if ($LASTEXITCODE -ne 0) { Write-Error "pip install failed"; exit 1 }
 
-# --- 3. Fetch models ----------------------------------------------------
-if ($SkipModels) {
-    Write-Host "`nSkipping model fetch (-SkipModels)" -ForegroundColor Yellow
-} else {
-    Write-Host "`nFetching models - this can take 15-30 minutes for the ~16 GB download."
-    & $venvPython -m aitutor_server.models.manager fetch
-    if ($LASTEXITCODE -ne 0) {
-        Write-Warning "model manager exited with code $LASTEXITCODE; check %APPDATA%\AIEssayTutor\server.log"
-    }
+# --- 3. Gemini API key reminder -----------------------------------------
+$configFile = Join-Path $env:APPDATA "AIEssayTutor\config.json"
+if (-not ($env:GEMINI_API_KEY) -and -not (Test-Path $configFile)) {
+    Write-Host "`nNo Gemini API key found." -ForegroundColor Yellow
+    Write-Host "Set one before running the server, e.g.:"
+    Write-Host '    $env:GEMINI_API_KEY = "your-key-here"' -ForegroundColor Gray
+    Write-Host "  or create $configFile with:"
+    Write-Host '    { "gemini_api_key": "your-key-here" }' -ForegroundColor Gray
 }
 
 Write-Host "`nDone." -ForegroundColor Green
-Write-Host "Run dev server:    .\scripts\run_server_dev.ps1"
-Write-Host "Build/install OXT: .\scripts\build_oxt.ps1; .\scripts\install_oxt.ps1"
+Write-Host "Run dev server: .\scripts\run_server_dev.ps1   (opens http://127.0.0.1:8765)"

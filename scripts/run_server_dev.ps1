@@ -4,15 +4,13 @@
   Run the AI server in dev mode with auto-reload on a fixed port.
 
 .DESCRIPTION
-  Starts uvicorn with --reload at http://127.0.0.1:8765. This is the dev path -
-  the production path is auto-spawn from the LO extension on an ephemeral port.
-
-  Sidebar "Advanced" pane in the extension lets you point at this fixed dev port.
+  Starts uvicorn with --reload at http://127.0.0.1:8765 and opens it in the
+  browser. This serves both the SPA and the JSON API.
 #>
 [CmdletBinding()]
 param(
     [int]$Port = 8765,
-    [switch]$SkipModelFetch
+    [switch]$NoOpen
 )
 
 $ErrorActionPreference = "Stop"
@@ -23,8 +21,11 @@ if (-not (Test-Path $venvPython)) {
     exit 1
 }
 
-if ($SkipModelFetch) {
-    $env:AITUTOR_SKIP_MODEL_FETCH = "1"
+if (-not ($env:GEMINI_API_KEY)) {
+    $configFile = Join-Path $env:APPDATA "AIEssayTutor\config.json"
+    if (-not (Test-Path $configFile)) {
+        Write-Warning "No GEMINI_API_KEY set and no config.json; /api calls will 503 until you add a key."
+    }
 }
 
 # Wipe stale .pyc bytecode -- watchfiles can reload the .py but Python still
@@ -35,8 +36,9 @@ Get-ChildItem -Path (Join-Path $repoRoot "server") -Directory -Recurse `
               -Filter "__pycache__" -ErrorAction SilentlyContinue |
     ForEach-Object { Remove-Item $_.FullName -Recurse -Force }
 
-Write-Host "AI Essay Tutor server (dev) - http://127.0.0.1:$Port" -ForegroundColor Cyan
+Write-Host "AI Essay Tutor (dev) - http://127.0.0.1:$Port" -ForegroundColor Cyan
 Write-Host "  log:  $env:APPDATA\AIEssayTutor\server.log"
 Write-Host "  Ctrl-C to stop`n"
 
-& $venvPython -m aitutor_server.main --port $Port --reload
+$openFlag = if ($NoOpen) { @() } else { @('--open') }
+& $venvPython -m aitutor_server.main --port $Port --reload @openFlag

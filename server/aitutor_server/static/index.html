@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AI Essay Tutor</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 40rem; margin: 4rem auto; padding: 0 1rem; line-height: 1.5; }
+    code { background: #f0f0f0; padding: 0.1rem 0.3rem; border-radius: 3px; }
+    .status { padding: 0.75rem 1rem; border-radius: 6px; margin: 1rem 0; }
+    .ok { background: #e7f6e7; } .warn { background: #fdf3e0; }
+  </style>
+</head>
+<body>
+  <h1>AI Essay Tutor</h1>
+  <p>The server is running. The browser front-end (capture &rarr; transcription
+  review &rarr; annotated grading) is <strong>Phase B</strong> and not built yet.</p>
+
+  <div id="health" class="status">Checking server health&hellip;</div>
+
+  <p>API endpoints available now:</p>
+  <ul>
+    <li><code>POST /api/transcribe</code> &mdash; multipart: <code>question_images</code>, <code>essay_images</code>, <code>language</code></li>
+    <li><code>POST /api/grade</code> &mdash; JSON <code>GradeRequest</code></li>
+    <li><code>GET  /api/health</code></li>
+  </ul>
+
+  <script>
+    fetch("/api/health").then(r => r.json()).then(h => {
+      const el = document.getElementById("health");
+      const keyed = h.gemini_key_present;
+      el.className = "status " + (keyed ? "ok" : "warn");
+      el.innerHTML = keyed
+        ? `Healthy. Transcribe model: <code>${h.transcribe_model}</code>, grade model: <code>${h.grade_model}</code>.`
+        : "No Gemini API key configured. Set <code>GEMINI_API_KEY</code> in the environment "
+          + "or add <code>gemini_api_key</code> to <code>config.json</code>, then restart.";
+    }).catch(() => {
+      const el = document.getElementById("health");
+      el.className = "status warn";
+      el.textContent = "Could not reach /api/health.";
+    });
+  </script>
+</body>
+</html>

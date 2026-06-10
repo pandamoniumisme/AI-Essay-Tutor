@@ -8,7 +8,7 @@ import logging.handlers
 import os
 import sys
 
-from aitutor_server.models.paths import LOG_FILE, ensure_dirs
+from aitutor_server.paths import LOG_FILE, ensure_dirs
 
 _CONFIGURED = False
 
@@ -45,6 +45,7 @@ def setup_logging(level: str | int | None = None) -> None:
 
     # Quiet down chatty libraries
     logging.getLogger("urllib3").setLevel(logging.WARNING)
-    logging.getLogger("huggingface_hub").setLevel(logging.WARNING)
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("google_genai").setLevel(logging.WARNING)
 
     _CONFIGURED = True

@@ -121,36 +121,3 @@ class GradeResponse(BaseModel):
     # by the prompt; kept optional for backwards-compat / praise comments.
     comments: list[RubricComment] = Field(default_factory=list, max_length=15)
     overall_feedback: Annotated[str, Field(max_length=1200)]
-
-
-# --- /models/status ------------------------------------------------------
-
-ModelState = Literal["missing", "downloading", "converting", "ready", "error"]
-
-
-class OcrModelStatus(BaseModel):
-    detector: ModelState
-    rec_zh: ModelState
-    rec_en: ModelState
-
-
-class CaptionerModelStatus(BaseModel):
-    """The visual-grounding model that captions question-image illustrations
-    so the grader can judge picture-fidelity in the student's essay (relevant
-    for PSLE Chinese 看图作文 and English Continuous Writing picture stimuli)."""
-
-    name: str  # "Qwen3.5-4B-Instruct"
-    state: ModelState
-
-
-class LlmModelStatus(BaseModel):
-    name: str  # "Qwen3.5-9B" or "Qwen3-8B-Instruct" once decided
-    state: ModelState
-
-
-class ModelsStatus(BaseModel):
-    ocr: OcrModelStatus
-    captioner: CaptionerModelStatus
-    llm: LlmModelStatus
-    progress: float = Field(ge=0.0, le=1.0)
-    message: str = ""
