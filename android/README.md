@@ -36,13 +36,24 @@ fetches). The Z Flip 5's 8 GB lands on 2B. `ModelAdvisor` is unit-tested.
 
 ## Status
 
-- **Phase 1 (stub inference): code complete.** `StubInference` returns canned
-  responses so the full capture → review → annotated-results flow + camera
-  capture + bridge can be validated on the phone with **zero model**. Build the
-  app in Android Studio and run.
-- **Phase 2+ (real model): skeletoned.** `LlamaInference` + `LlamaJni` +
-  `src/main/cpp/` show the integration; the native build is disabled
-  (`externalNativeBuild` commented out) until llama.cpp is vendored.
+The whole app is implemented in Kotlin and **CI-verified to compile** (the
+`build-apk` workflow). What ships in the APK depends on whether the native
+engine is compiled in:
+
+- **Engine wiring — complete.** `LlamaInference` (download → load → vision OCR →
+  grammar-constrained grade → validate), `ModelDownloader` (resumable + sha256),
+  `InferenceService` (foreground service), the RAM-based model picker, and the
+  JS bridge are all done. `Inference.create()` uses the real engine when the
+  native lib is present and **falls back to `StubInference`** otherwise.
+- **Native engine — bring-up scaffold, OFF by default.** `cpp/llama_jni.cpp` +
+  `CMakeLists.txt` implement the llama.cpp text + `libmtmd` vision paths, but
+  `externalNativeBuild` is commented out so the APK builds without the NDK. The
+  default CI APK therefore ships the **stub fallback** (full UI + camera + RAM
+  recommendation, placeholder grades).
+- **Two things gate a real-grading APK:** (1) compile the native engine on a
+  machine with the NDK + a device to iterate the `mtmd`/grammar API and the
+  Qwen3.5 vision template; (2) fill in verified model URLs/checksums in
+  `ModelRepo` (currently placeholders).
 
 ## Verify the core (no Android toolchain needed)
 

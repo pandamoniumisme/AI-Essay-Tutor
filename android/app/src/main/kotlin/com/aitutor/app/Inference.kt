@@ -30,8 +30,14 @@ interface Inference {
     companion object {
         private val json = Json { encodeDefaults = true; ignoreUnknownKeys = true }
 
-        // Phase 1 default. Swap to LlamaInference(context) once the JNI layer lands.
-        fun create(context: Context): Inference = StubInference(context, json)
+        // Use the real llama.cpp engine when its native library is present in
+        // the APK; otherwise fall back to the canned StubInference so the app
+        // still runs (e.g. a build without the native lib, or a quick demo).
+        fun create(context: Context): Inference =
+            if (nativeAvailable()) LlamaInference(context, json) else StubInference(context, json)
+
+        private fun nativeAvailable(): Boolean =
+            try { LlamaJni.ensureLoaded(); true } catch (_: Throwable) { false }
     }
 }
 

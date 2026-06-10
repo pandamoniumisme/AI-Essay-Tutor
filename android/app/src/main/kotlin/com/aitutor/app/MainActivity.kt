@@ -2,6 +2,7 @@ package com.aitutor.app
 
 import android.annotation.SuppressLint
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
@@ -43,6 +44,11 @@ class MainActivity : AppCompatActivity() {
             domStorageEnabled = true
             // Local assets only; no remote content loads by default (offline).
             allowFileAccess = true
+        }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerForActivityResult(ActivityResultContracts.RequestPermission()) {}
+                .launch(android.Manifest.permission.POST_NOTIFICATIONS)
         }
 
         val bridge = AndroidBridge(webView, Inference.create(applicationContext))

@@ -39,12 +39,16 @@ class AndroidBridge(
     fun health(): String = inference.health()
 
     private fun run(token: String, work: suspend () -> String) {
+        val ctx = webView.context.applicationContext
         scope.launch {
+            InferenceService.start(ctx, "Working…")
             try {
                 val result = work()
                 resolve(token, result)
             } catch (e: Throwable) {
                 reject(token, e.message ?: "on-device inference failed")
+            } finally {
+                InferenceService.stop(ctx)
             }
         }
     }
@@ -55,8 +59,10 @@ class AndroidBridge(
     private fun reject(token: String, message: String) =
         eval("window.__nativeReject(${js(token)}, ${js(message)})")
 
-    private fun progress(token: String, message: String, fraction: Double) =
+    private fun progress(token: String, message: String, fraction: Double) {
+        InferenceService.update(webView.context.applicationContext, message)
         eval("window.__nativeProgress(${js(token)}, ${js(message)}, $fraction)")
+    }
 
     private fun eval(code: String) = webView.post { webView.evaluateJavascript(code, null) }
 
