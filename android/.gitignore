@@ -1,0 +1,17 @@
+# Gradle / build output
+.gradle/
+build/
+*/build/
+local.properties
+
+# Generated at build time by the copyAssets task (single-sourced from server/)
+app/src/main/assets/
+
+# Vendored native dep (add as a git submodule instead)
+app/src/main/cpp/llama.cpp/
+
+# Android Studio
+.idea/
+*.iml
+.cxx/
+captures/
