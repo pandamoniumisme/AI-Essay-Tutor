@@ -85,6 +85,17 @@ Output: `android/app/build/outputs/apk/debug/app-debug.apk`.
 
 ---
 
+## 4b. Build — Option C: download from CI (no toolchain at all)
+
+Every push to `android/on-device` runs the **Android** GitHub Actions workflow,
+which builds the debug APK on a runner and uploads it as an artifact:
+
+1. GitHub → **Actions** → latest **Android** run → **Artifacts** →
+   **`app-debug-apk`**.
+2. Unzip it to get `app-debug.apk`, then jump to [§5](#5-install-on-your-phone).
+
+You can also trigger it manually via *Actions → Android → Run workflow*.
+
 ## 5. Install on your phone
 
 1. **Enable Developer options:** Settings → *About phone* → tap **Build number**

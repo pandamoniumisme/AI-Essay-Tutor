@@ -22,6 +22,5 @@ tasks.test {
     useJUnitPlatform()
 }
 
-kotlin {
-    jvmToolchain(21)
-}
+// No explicit jvmToolchain: compile with whatever JDK runs Gradle (17 on CI,
+// 21 locally). The code is JDK-version-agnostic.
