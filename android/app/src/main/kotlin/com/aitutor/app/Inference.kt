@@ -31,12 +31,12 @@ interface Inference {
         private val json = Json { encodeDefaults = true; ignoreUnknownKeys = true }
 
         // Phase 1 default. Swap to LlamaInference(context) once the JNI layer lands.
-        fun create(context: Context): Inference = StubInference(json)
+        fun create(context: Context): Inference = StubInference(context, json)
     }
 }
 
 /** Canned responses so Phase 1 can verify UI + bridge end-to-end. */
-class StubInference(private val json: Json) : Inference {
+class StubInference(private val context: Context, private val json: Json) : Inference {
 
     override suspend fun transcribe(payloadJson: String, onProgress: ProgressCb): String {
         onProgress("transcribing (stub)", 0.5)
@@ -80,6 +80,8 @@ class StubInference(private val json: Json) : Inference {
         return json.encodeToString(GradeResponse.serializer(), resp)
     }
 
+    // Reports real device RAM + the RAM-based recommendation (model not yet
+    // downloaded in the stub), so the setup screen shows it on the real phone.
     override fun health(): String =
-        """{"ok":true,"version":"0.2.0","gemini_key_present":false,"on_device":true,"model":"stub","grade_model":"stub"}"""
+        ModelStatus.healthJson(context, modelReady = false, activeModel = "stub")
 }

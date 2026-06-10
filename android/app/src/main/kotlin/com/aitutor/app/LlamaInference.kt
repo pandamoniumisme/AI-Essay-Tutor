@@ -32,15 +32,18 @@ class LlamaInference(
     private val json: Json,
 ) : Inference {
 
+    // Chosen from device RAM at setup (< 12 GB-class -> 2B, else 4B).
+    private val recommended by lazy { DeviceRam.recommend(context) }
     private val modelDir: File get() = File(context.filesDir, "models")
-    private val modelPath get() = File(modelDir, "qwen3.5-2b-q4.gguf").absolutePath
-    private val mmprojPath get() = File(modelDir, "qwen3.5-2b-mmproj.gguf").absolutePath
+    private val modelPath get() = File(modelDir, "${recommended.id}-q4.gguf").absolutePath
+    private val mmprojPath get() = File(modelDir, "${recommended.id}-mmproj.gguf").absolutePath
 
     private var handle: Long = 0L
 
     private fun ensureModel() {
         if (handle != 0L) return
-        // TODO(Phase 4): download GGUF + mmproj into modelDir if absent (resumable + checksum).
+        // TODO(Phase 4): download the RECOMMENDED model's GGUF + mmproj into
+        // modelDir if absent (resumable + checksum). recommended.id selects 2B/4B.
         check(File(modelPath).exists()) { "model not downloaded yet" }
         LlamaJni.ensureLoaded()
         handle = LlamaJni.loadModel(modelPath, mmprojPath, nGpuLayers = 99)
@@ -98,10 +101,8 @@ class LlamaInference(
         return json.encodeToString(GradeResponse.serializer(), response)
     }
 
-    override fun health(): String {
-        val ready = File(modelPath).exists()
-        return """{"ok":true,"on_device":true,"model_ready":$ready,"model":"qwen3.5-2b","grade_model":"qwen3.5-2b"}"""
-    }
+    override fun health(): String =
+        ModelStatus.healthJson(context, modelReady = File(modelPath).exists(), activeModel = recommended.id)
 
     private fun loadGraderSystem(language: String): String {
         val name = if (language == "zh-Hans") "prompts/grader_zh.md" else "prompts/grader_en.md"

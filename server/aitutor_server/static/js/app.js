@@ -69,7 +69,18 @@ async function refreshHealth() {
   const el = document.getElementById("health");
   try {
     const hh = await api.health();
-    if (hh.gemini_key_present) {
+    if (hh.on_device) {
+      // On-device build: show the RAM-based model recommendation at setup,
+      // before any download.
+      el.className = "health ok";
+      if (hh.model_ready) {
+        el.textContent = `on-device · ${hh.model}`;
+      } else {
+        const rec = hh.recommended_model_name
+          ? ` · recommended ${hh.recommended_model_name} (~${hh.recommended_download_gb} GB)` : "";
+        el.textContent = `device ${hh.ram_gb} GB${rec} · model not downloaded`;
+      }
+    } else if (hh.gemini_key_present) {
       el.className = "health ok";
       el.textContent = `model: ${hh.grade_model}`;
     } else {
