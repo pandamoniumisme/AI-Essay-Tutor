@@ -54,8 +54,10 @@ class OnlineInference(
             LangDetect.detect(visionCall(Prompts.essayPrompt("zh-Hans"), essayImgs.first(), 1500))
         }
 
+        // Plain for-loops (not forEachIndexed/joinToString) so the suspend
+        // visionCall is invoked within the coroutine body.
         val essayParts = mutableListOf<String>()
-        essayImgs.forEachIndexed { i, img ->
+        for ((i, img) in essayImgs.withIndex()) {
             onProgress("transcribing essay (page ${i + 1}/${essayImgs.size})", 0.10 + 0.60 * i / essayImgs.size)
             val t = visionCall(Prompts.essayPrompt(language), img, 1500).trim()
             if (t.isNotEmpty()) essayParts.add(t)
@@ -63,9 +65,12 @@ class OnlineInference(
         val essayText = essayParts.joinToString("\n\n")
 
         onProgress("transcribing question + describing pictures", 0.75)
-        val questionText = questionImgs.joinToString("\n\n") {
-            visionCall(Prompts.questionPrompt(language), it, 1200).trim()
+        val questionParts = mutableListOf<String>()
+        for (img in questionImgs) {
+            val p = visionCall(Prompts.questionPrompt(language), img, 1200).trim()
+            if (p.isNotEmpty()) questionParts.add(p)
         }
+        val questionText = questionParts.joinToString("\n\n")
 
         onProgress("finalising", 0.95)
         val resp = TranscribeResponse(
