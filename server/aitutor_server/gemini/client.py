@@ -23,8 +23,8 @@ from aitutor_server.paths import CONFIG_FILE
 log = logging.getLogger(__name__)
 
 # Cost-safe defaults. Override via env without a code change.
-DEFAULT_TRANSCRIBE_MODEL = "gemini-2.5-flash"
-DEFAULT_GRADE_MODEL = "gemini-2.5-flash"
+DEFAULT_TRANSCRIBE_MODEL = "gemini-3.5-flash"
+DEFAULT_GRADE_MODEL = "gemini-3.5-flash"
 
 
 def transcribe_model() -> str:

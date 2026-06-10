@@ -5,9 +5,9 @@ composition essays. Photograph the question and the handwritten essay; the app
 transcribes the essay, scores it against the PSLE rubric, and shows
 tracked-change corrections plus comments — like a teacher marking the page.
 
-**Status:** in development. The server backend (Phase A) is Gemini-backed and
-working; the browser front-end (Phase B) is not built yet. See
-`docs/web-solution-plan.md` for the full design.
+**Status:** in development. The Gemini-backed server (Phase A) and the browser
+front-end (Phase B: capture → transcription review → annotated results) are in
+place. See `docs/web-solution-plan.md` for the full design.
 
 ## Architecture
 
@@ -52,11 +52,19 @@ Config via environment:
 | Var | Default | Purpose |
 |---|---|---|
 | `GEMINI_API_KEY` | — | Gemini API key (or `gemini_api_key` in `config.json`) |
-| `AITUTOR_TRANSCRIBE_MODEL` | `gemini-2.5-flash` | model for OCR + picture description |
-| `AITUTOR_GRADE_MODEL` | `gemini-2.5-flash` | model for rubric grading (bump to a `pro` tier for quality) |
+| `AITUTOR_TRANSCRIBE_MODEL` | `gemini-3.5-flash` | model for OCR + picture description |
+| `AITUTOR_GRADE_MODEL` | `gemini-3.5-flash` | model for rubric grading (bump to a `pro` tier for quality) |
+
+## Front-end
+
+A no-build vanilla-JS SPA in `server/aitutor_server/static/` (served by the
+same FastAPI process — no bundler, no node runtime dependency at run time). The
+span-anchoring engine that renders redlines and comments (`js/annotate.js`) is
+the browser replacement for the old `writer_ops.py`.
 
 ## Tests
 
 ```bash
-cd server && python -m pytest
+cd server && python -m pytest          # server + grader validation
+node --test tests/js/annotate.test.mjs # front-end span-anchoring engine
 ```
