@@ -5,6 +5,9 @@ never leave the phone. Inference runs **Qwen3.5-2B** (multimodal, Apache 2.0)
 via llama.cpp — one model does OCR + picture description (vision) and grading
 (text-only). Design: `/root/.claude/plans/is-there-a-qwen-proud-octopus.md`.
 
+**Building the APK?** See [SETUP.md](SETUP.md) for the step-by-step build +
+install guide.
+
 ## How it reuses the web app
 
 The whole front-end (`server/aitutor_server/static/`) is loaded in a `WebView`.
