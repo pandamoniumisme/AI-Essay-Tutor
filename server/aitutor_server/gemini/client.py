@@ -17,6 +17,7 @@ import json
 import logging
 import os
 from functools import lru_cache
+from pathlib import Path
 
 from aitutor_server.paths import CONFIG_FILE
 
@@ -27,15 +28,41 @@ DEFAULT_TRANSCRIBE_MODEL = "gemini-3.5-flash"
 DEFAULT_GRADE_MODEL = "gemini-3.5-flash"
 
 
+def _load_dotenv_once() -> None:
+    """Load ``.env`` from the current directory into the environment (without
+    overriding anything already set). No dependency on python-dotenv -- keeps
+    the "set your key in .env and run" path working with zero extra installs."""
+    if getattr(_load_dotenv_once, "_done", False):
+        return
+    _load_dotenv_once._done = True  # type: ignore[attr-defined]
+    path = Path.cwd() / ".env"
+    if not path.exists():
+        return
+    try:
+        for line in path.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            k, _, v = line.partition("=")
+            k, v = k.strip(), v.strip().strip('"').strip("'")
+            if k and k not in os.environ:
+                os.environ[k] = v
+    except OSError:
+        pass
+
+
 def transcribe_model() -> str:
+    _load_dotenv_once()
     return os.environ.get("AITUTOR_TRANSCRIBE_MODEL", DEFAULT_TRANSCRIBE_MODEL)
 
 
 def grade_model() -> str:
+    _load_dotenv_once()
     return os.environ.get("AITUTOR_GRADE_MODEL", DEFAULT_GRADE_MODEL)
 
 
 def _api_key() -> str | None:
+    _load_dotenv_once()
     key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
     if key:
         return key.strip()
