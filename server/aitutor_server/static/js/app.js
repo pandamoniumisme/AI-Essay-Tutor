@@ -80,12 +80,12 @@ async function refreshHealth() {
           ? ` · recommended ${hh.recommended_model_name} (~${hh.recommended_download_gb} GB)` : "";
         el.textContent = `device ${hh.ram_gb} GB${rec} · model not downloaded`;
       }
-    } else if (hh.gemini_key_present) {
+    } else if (hh.key_present) {
       el.className = "health ok";
-      el.textContent = `model: ${hh.grade_model}`;
+      el.textContent = `${hh.provider_label || hh.provider} · ${hh.model}`;
     } else {
       el.className = "health warn";
-      el.textContent = "No Gemini API key configured — set GEMINI_API_KEY and restart.";
+      el.textContent = `No API key for ${hh.provider_label || hh.provider || "the provider"} — set it and restart.`;
     }
   } catch {
     el.className = "health warn";

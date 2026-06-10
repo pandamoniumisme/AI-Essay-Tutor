@@ -20,8 +20,8 @@ from fastapi.staticfiles import StaticFiles
 from aitutor_server import __version__
 from aitutor_server.api import grade as grade_api
 from aitutor_server.api import transcribe as transcribe_api
-from aitutor_server.gemini import client as gemini_client
 from aitutor_server.paths import ensure_dirs
+from aitutor_server.providers import config as provider_config
 from aitutor_server.util.log import setup_logging
 
 _STATIC_DIR = Path(__file__).parent / "static"
@@ -31,10 +31,11 @@ _STATIC_DIR = Path(__file__).parent / "static"
 async def lifespan(_app: FastAPI):
     setup_logging()
     log = logging.getLogger(__name__)
-    log.info("AI Essay Tutor (web) v%s starting", __version__)
-    if not gemini_client.key_present():
-        log.warning("no Gemini API key configured; /api calls will return 503 "
-                    "until GEMINI_API_KEY is set (or config.json gemini_api_key)")
+    log.info("PSLE Compo Tutor (web) v%s starting (provider=%s, model=%s)",
+             __version__, provider_config.active_name(), provider_config.model())
+    if not provider_config.key_present():
+        log.warning("no API key for provider '%s'; /api calls return 503 until a key is set",
+                    provider_config.active_name())
     yield
     log.info("AI Essay Tutor shutting down")
 
@@ -46,13 +47,9 @@ app.include_router(grade_api.router)
 
 @app.get("/api/health")
 def health() -> dict:
-    return {
-        "ok": True,
-        "version": __version__,
-        "gemini_key_present": gemini_client.key_present(),
-        "transcribe_model": gemini_client.transcribe_model(),
-        "grade_model": gemini_client.grade_model(),
-    }
+    h = provider_config.health()
+    h["version"] = __version__
+    return h
 
 
 # Serve the SPA. Mounted last so /api/* routes win. ``html=True`` serves

@@ -6,8 +6,7 @@ import logging
 from fastapi import APIRouter, HTTPException
 
 from aitutor_server.api.schemas import GradeRequest, GradeResponse
-from aitutor_server.gemini import client as gemini_client
-from aitutor_server.gemini import grader
+from aitutor_server.providers import config, grader
 
 log = logging.getLogger(__name__)
 router = APIRouter()
@@ -19,5 +18,5 @@ async def grade(req: GradeRequest) -> GradeResponse:
              req.language, req.paper_type, len(req.essay_text))
     try:
         return grader.grade(req)
-    except gemini_client.MissingApiKey as exc:
+    except config.MissingApiKey as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc

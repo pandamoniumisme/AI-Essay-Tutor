@@ -1,14 +1,13 @@
-"""LLM grader via Gemini structured output.
+"""LLM grader.
 
-Replaces the OpenVINO Qwen3-8B grader. Generation is delegated to Gemini with
-a JSON ``response_schema``; the *validation* half (lenient parse, drop
-hallucinated/no-op spans, clamp scores, compute the v1-corrected essay for
-improvement-edit validation) is ported verbatim from the retired
-``llm/grader.py`` -- that logic is model-independent and still earns its keep
-(Gemini can still propose a span that isn't in the essay).
+Generation is delegated to the active online provider (Gemini or Qwen via the
+OpenAI-compatible backend) with a JSON-constrained response; the *validation*
+half (lenient parse, drop hallucinated/no-op spans, clamp scores, compute the
+v1-corrected essay for improvement-edit validation) is model-independent and
+still earns its keep -- any model can propose a span that isn't in the essay.
 
 The grader prompts (with the Singapore-vocabulary allowlists) live in
-``gemini/prompts/grader_{en,zh}.md`` and are passed as the system instruction.
+``providers/prompts/grader_{en,zh}.md`` and are passed as the system message.
 """
 from __future__ import annotations
 
@@ -25,7 +24,7 @@ from aitutor_server.api.schemas import (
     RubricScores,
     TrackedEdit,
 )
-from aitutor_server.gemini import client as gemini_client
+from aitutor_server.providers import client as backend
 
 log = logging.getLogger(__name__)
 
@@ -144,22 +143,7 @@ def _grade_response_json_schema(req: GradeRequest) -> dict:
 # --- Generation ----------------------------------------------------------
 
 def _generate_structured(system: str, user: str, schema: dict) -> str:
-    from google.genai import types
-
-    client = gemini_client.get_client()
-    cfg = types.GenerateContentConfig(
-        system_instruction=system.strip(),
-        temperature=0.0,
-        response_mime_type="application/json",
-        response_schema=schema,
-    )
-    log.info("grader generating (model=%s)", gemini_client.grade_model())
-    resp = client.models.generate_content(
-        model=gemini_client.grade_model(),
-        contents=user.strip(),
-        config=cfg,
-    )
-    raw = (resp.text or "").strip()
+    raw = backend.generate_text(system.strip(), user.strip(), json_schema=schema)
     log.info("grader raw output (%d chars), first 600:\n%s", len(raw), raw[:600])
     return raw
 

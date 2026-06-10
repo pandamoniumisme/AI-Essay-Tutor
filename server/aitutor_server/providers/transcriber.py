@@ -1,11 +1,11 @@
-"""Transcription: OCR + picture description via Gemini multimodal.
+"""Transcription: OCR + picture description via the active online provider.
 
-Replaces the OpenVINO Qwen2.5-VL captioner. Same public shape as before
-(``do_transcribe(...) -> TranscribeResponse``) so the API layer is unchanged.
+Same public shape as before (``do_transcribe(...) -> TranscribeResponse``) so
+the API layer is unchanged.
 
-Images arrive as ``(bytes, mime_type)`` tuples -- we hand them straight to
-Gemini as inline parts; no OpenCV decode is needed. Each essay/question page is
-one ``generate_content`` call so progress stays granular.
+Images arrive as ``(bytes, mime_type)`` tuples -- the OpenAI-compatible backend
+sends them as inline base64 ``image_url`` parts. Each essay/question page is one
+multimodal call so progress stays granular.
 
 The prompts are ported verbatim from the retired ``vision/captioner.py`` so the
 question output keeps its two-section (``=== Prompt === / === Pictures ===``)
@@ -18,7 +18,7 @@ from collections.abc import Callable
 
 from aitutor_server import lang_detect
 from aitutor_server.api.schemas import Language, OcrLine, TranscribeResponse
-from aitutor_server.gemini import client as gemini_client
+from aitutor_server.providers import client as backend
 
 log = logging.getLogger(__name__)
 
@@ -103,30 +103,11 @@ _ESSAY_PROMPT_ZH = """\
 """
 
 
-# --- Single-image call ---------------------------------------------------
-
-def _run(prompt: str, image: Image, model: str) -> str:
-    """One multimodal Gemini call: prompt + a single image, temperature 0."""
-    from google.genai import types
-
-    client = gemini_client.get_client()
-    data, mime = image
-    resp = client.models.generate_content(
-        model=model,
-        contents=[
-            types.Part.from_bytes(data=data, mime_type=mime),
-            types.Part.from_text(text=prompt),
-        ],
-        config=types.GenerateContentConfig(temperature=0.0),
-    )
-    return (resp.text or "").strip()
-
-
 # --- Public API ----------------------------------------------------------
 
 def transcribe_essay_page(image: Image, language: Language) -> str:
     prompt = _ESSAY_PROMPT_ZH if language == "zh-Hans" else _ESSAY_PROMPT_EN
-    return _run(prompt, image, gemini_client.transcribe_model())
+    return backend.generate_vision(prompt, image)
 
 
 def transcribe_essay_pages(images: list[Image], language: Language,
@@ -145,7 +126,7 @@ def transcribe_essay_pages(images: list[Image], language: Language,
 def transcribe_question_page(image: Image, language: Language) -> str:
     try:
         prompt = _QUESTION_PROMPT_ZH if language == "zh-Hans" else _QUESTION_PROMPT_EN
-        return _run(prompt, image, gemini_client.transcribe_model())
+        return backend.generate_vision(prompt, image, max_tokens=1200)
     except Exception:
         log.exception("question transcription failed; returning empty")
         return ""

@@ -1,35 +1,40 @@
-# AI Essay Tutor
+# PSLE Compo Tutor
 
-A local web app that grades PSLE-level English and Simplified Chinese
-composition essays. Photograph the question and the handwritten essay; the app
-transcribes the essay, scores it against the PSLE rubric, and shows
-tracked-change corrections plus comments — like a teacher marking the page.
+Grades PSLE-level English and Simplified Chinese composition essays. Photograph
+the question and the handwritten essay; the app transcribes it, scores it
+against the PSLE rubric, and shows redline corrections, comments, and an
+improved version — like a teacher marking the page.
 
-**Status:** in development. The Gemini-backed server (Phase A) and the browser
-front-end (Phase B: capture → transcription review → annotated results) are in
-place. See `docs/web-solution-plan.md` for the full design.
+Two builds share one front-end:
+- **Web app** (`server/`) — online inference via Gemini or Alibaba Cloud (Qwen).
+- **Android app** (`android/`) — fully on-device Qwen3.5 (2B/4B). See `android/`.
 
-## Architecture
+**Status:** in development. See `docs/web-solution-plan.md` for the full design.
 
-A single local FastAPI server runs on `127.0.0.1`, serving both the browser UI
-and a JSON API. All inference (OCR + picture description + rubric grading) is
-delegated to Google's **Gemini API** over the network.
+## Web architecture
+
+A local FastAPI server on `127.0.0.1` serves the browser UI and a JSON API.
+Online inference goes to one of two interchangeable **OpenAI-compatible**
+providers, selected by `AITUTOR_PROVIDER`.
 
 ```
-Browser SPA ──fetch──▶ server/ FastAPI (local) ──HTTPS──▶ Gemini API
- (capture →                  │  /api/transcribe   gemini-2.5-flash (OCR + caption)
-  review →                   │  /api/grade        gemini-2.5-pro|flash (grading)
+Browser SPA ──fetch──▶ server/ FastAPI (local) ──HTTPS──▶ Gemini | Alibaba Cloud (Qwen)
+ (capture →                  │  /api/transcribe   transcription (OCR + caption)
+  review →                   │  /api/grade        rubric grade (JSON-constrained)
   annotated results)         │  /api/health
 ```
 
-> **Privacy note:** essays are sent to Google for processing. These are
-> children's essays — see the privacy section of `docs/web-solution-plan.md`
-> before using on real student work.
+> **Privacy note:** essays are sent to the chosen provider for processing. These
+> are children's essays — see the privacy section of `docs/web-solution-plan.md`
+> before using on real student work. (The Android build keeps everything
+> on-device.)
 
 ## Layout
 
-- `server/` — FastAPI app. Serves the SPA (`aitutor_server/static/`) and the
-  API; Gemini calls live in `aitutor_server/gemini/`.
+- `server/` — FastAPI app. Serves the SPA (`aitutor_server/static/`); provider
+  config + the shared OpenAI-compatible client + transcriber/grader live in
+  `aitutor_server/providers/`.
+- `android/` — on-device Android app (Qwen3.5 via llama.cpp). See `android/README.md`.
 - `scripts/` — PowerShell helpers for venv bootstrap and the dev server.
 - `extension/` — **parked.** The original LibreOffice `.oxt` front-end, kept in
   git history; not part of the web build.
@@ -37,23 +42,25 @@ Browser SPA ──fetch──▶ server/ FastAPI (local) ──HTTPS──▶ Ge
 ## Quick start
 
 ```powershell
-# One-time: create venv + install deps (no model download anymore)
+# One-time: create venv + install deps (no model download)
 .\scripts\bootstrap_server.ps1
 
-# Set your Gemini API key (or put it in %APPDATA%\AIEssayTutor\config.json)
+# Set your provider key (Gemini shown; or DASHSCOPE_API_KEY for Alibaba Cloud)
 $env:GEMINI_API_KEY = "your-key-here"
 
 # Run the app (opens http://127.0.0.1:8765 in the browser)
 .\scripts\run_server_dev.ps1
 ```
 
-Config via environment:
+Config via environment (or `.env` — see `.env.example`):
 
 | Var | Default | Purpose |
 |---|---|---|
-| `GEMINI_API_KEY` | — | Gemini API key (or `gemini_api_key` in `config.json`) |
-| `AITUTOR_TRANSCRIBE_MODEL` | `gemini-3.5-flash` | model for OCR + picture description |
-| `AITUTOR_GRADE_MODEL` | `gemini-3.5-flash` | model for rubric grading (bump to a `pro` tier for quality) |
+| `AITUTOR_PROVIDER` | `gemini` | `gemini` or `dashscope` |
+| `GEMINI_API_KEY` | — | Gemini key (or `gemini_api_key` in `config.json`) |
+| `AITUTOR_GEMINI_MODEL` | `gemini-3.5-flash` | Gemini model id |
+| `DASHSCOPE_API_KEY` | — | Alibaba Cloud Model Studio key |
+| `AITUTOR_DASHSCOPE_MODEL` | `qwen3.5-flash` | Qwen model id |
 
 ## Front-end
 

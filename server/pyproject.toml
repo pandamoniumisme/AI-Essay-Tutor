@@ -15,10 +15,10 @@ dependencies = [
     "python-multipart>=0.0.9",
     "pydantic>=2.6",
 
-    # All inference (OCR + picture description + grading) is delegated to the
-    # Gemini API. This single SDK replaces the entire OpenVINO / optimum /
-    # transformers / huggingface / opencv stack the local-NPU build used.
-    "google-genai>=1.0",
+    # Online inference (OCR + picture description + grading) goes to one of two
+    # OpenAI-compatible providers -- Gemini or Alibaba Cloud (Qwen) -- so a
+    # single OpenAI SDK serves both.
+    "openai>=1.40",
 
     # Server-side image validation / optional downscale of uploads.
     "pillow>=10.4",
@@ -36,7 +36,7 @@ where = ["."]
 include = ["aitutor_server*"]
 
 [tool.setuptools.package-data]
-aitutor_server = ["gemini/prompts/*.md", "static/**/*"]
+aitutor_server = ["providers/prompts/*.md", "static/**/*"]
 
 [tool.ruff]
 line-length = 110

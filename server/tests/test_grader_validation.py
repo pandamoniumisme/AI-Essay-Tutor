@@ -8,7 +8,7 @@ from __future__ import annotations
 import json
 
 from aitutor_server.api.schemas import GradeRequest
-from aitutor_server.gemini import grader
+from aitutor_server.providers import grader
 
 
 def _req(essay: str, language: str = "zh-Hans", paper: str = "continuous") -> GradeRequest:

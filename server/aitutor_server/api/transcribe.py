@@ -12,8 +12,7 @@ from typing import Literal
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 
 from aitutor_server.api.schemas import TranscribeResponse
-from aitutor_server.gemini import client as gemini_client
-from aitutor_server.gemini import transcriber
+from aitutor_server.providers import config, transcriber
 
 log = logging.getLogger(__name__)
 router = APIRouter()
@@ -46,5 +45,5 @@ async def transcribe(
     e = _read_uploads(essay_images, "essay_images")
     try:
         return transcriber.do_transcribe(q, e, language)
-    except gemini_client.MissingApiKey as exc:
+    except config.MissingApiKey as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
