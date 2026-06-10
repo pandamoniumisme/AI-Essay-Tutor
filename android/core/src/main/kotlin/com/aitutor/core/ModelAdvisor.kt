@@ -11,7 +11,11 @@ enum class ModelChoice(
     val approxDownloadGb: Double,
 ) {
     QWEN_2B("qwen3.5-2b", "Qwen3.5-2B", 2.0),
-    QWEN_4B("qwen3.5-4b", "Qwen3.5-4B", 3.5),
+    QWEN_4B("qwen3.5-4b", "Qwen3.5-4B", 3.5);
+
+    companion object {
+        fun fromId(id: String?): ModelChoice? = entries.firstOrNull { it.id == id }
+    }
 }
 
 object ModelAdvisor {

@@ -97,34 +97,43 @@ async function refreshHealth() {
 
 function fileSlot(label, kind) {
   const list = h("div", { class: "thumbs" });
-  const input = h("input", {
-    type: "file", accept: "image/*", capture: "environment", multiple: true,
-    onchange: (e) => {
-      const files = Array.from(e.target.files || []);
-      if (kind === "question") state.questionFiles = state.questionFiles.concat(files);
-      else state.essayFiles = state.essayFiles.concat(files);
-      drawThumbs();
-    },
-  });
+
   const drawThumbs = () => {
     clear(list);
     const files = kind === "question" ? state.questionFiles : state.essayFiles;
     files.forEach((f, i) => {
       const url = URL.createObjectURL(f);
-      const img = h("img", { src: url, alt: f.name });
+      const img = h("img", { src: url, alt: f.name || "page" });
       const rm = h("button", {
         class: "rm", title: "remove",
-        onclick: () => {
-          files.splice(i, 1);
-          drawThumbs();
-        },
+        onclick: () => { files.splice(i, 1); drawThumbs(); },
       }, "×");
       list.appendChild(h("div", { class: "thumb" }, img, rm));
     });
   };
+
+  const addFiles = (fileList) => {
+    const files = Array.from(fileList || []);
+    if (!files.length) return;
+    if (kind === "question") state.questionFiles = state.questionFiles.concat(files);
+    else state.essayFiles = state.essayFiles.concat(files);
+    drawThumbs();
+  };
+
+  // A button that wraps a hidden file input. `camera` sets capture so the
+  // WebView opens the camera; otherwise it's the gallery/file picker.
+  const pickButton = (text, camera) => {
+    const attrs = { type: "file", accept: "image/*", class: "file-input",
+      onchange: (e) => { addFiles(e.target.files); e.target.value = ""; } };
+    if (camera) attrs.capture = "environment"; else attrs.multiple = true;
+    return h("label", { class: "pick-btn" }, text, h("input", attrs));
+  };
+
   return h("div", { class: "slot" },
     h("label", {}, label),
-    input,
+    h("div", { class: "pick-row" },
+      pickButton("📷 Camera", true),
+      pickButton("🖼 Gallery", false)),
     list);
 }
 
@@ -190,7 +199,19 @@ function providerLabel(id) {
 function renderSettings() {
   const root = app();
   clear(root);
-  const s = api.getSettings() || { online: false, provider: "gemini", geminiKey: "", dashscopeKey: "", geminiModel: "", dashscopeModel: "" };
+  const s = api.getSettings() || { online: false, provider: "gemini", geminiKey: "", dashscopeKey: "", geminiModel: "", dashscopeModel: "", offlineModel: "auto", ramGb: 0, recommendedModelName: "Qwen3.5-2B" };
+
+  // --- offline block: recommended model + 2B/4B choice ---
+  const offlineBlock = h("div", { class: "online-block" + (s.online ? " hidden" : "") },
+    h("p", { class: "hint" },
+      `This device has ${s.ramGb} GB RAM — recommended: ${s.recommendedModelName}.`),
+    h("label", {}, "On-device model"),
+    h("select", { onchange: (e) => { s.offlineModel = e.target.value; } },
+      h("option", { value: "auto", selected: s.offlineModel === "auto" },
+        `Recommended (${s.recommendedModelName})`),
+      h("option", { value: "qwen3.5-2b", selected: s.offlineModel === "qwen3.5-2b" }, "Qwen3.5-2B (smaller, fits 8 GB)"),
+      h("option", { value: "qwen3.5-4b", selected: s.offlineModel === "qwen3.5-4b" }, "Qwen3.5-4B (better, needs ~12 GB)")),
+    h("p", { class: "hint" }, "4B may be too large for phones under 12 GB."));
 
   const onlineBlock = h("div", { class: "online-block" + (s.online ? "" : " hidden") });
   const keyInput = h("input", { type: "password", class: "edit", placeholder: "Paste API key" });
@@ -227,7 +248,11 @@ function renderSettings() {
     h("label", { class: "radio mode" },
       h("input", {
         type: "radio", name: "mode", checked: s.online === online,
-        onchange: () => { s.online = online; onlineBlock.classList.toggle("hidden", !online); },
+        onchange: () => {
+          s.online = online;
+          onlineBlock.classList.toggle("hidden", !online);
+          offlineBlock.classList.toggle("hidden", online);
+        },
       }),
       h("span", {}, text), sub ? h("span", { class: "hint" }, " " + sub) : null);
 
@@ -235,6 +260,7 @@ function renderSettings() {
     h("h2", {}, "Settings"),
     h("div", {}, modeRadio(false, "On-device (offline)", "— private, slower")),
     h("div", {}, modeRadio(true, "Online provider", "— faster, sends data out")),
+    offlineBlock,
     onlineBlock,
     h("div", { class: "actions" },
       h("button", { onclick: renderCapture }, "← Back"),

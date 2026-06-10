@@ -30,31 +30,37 @@ body {
 }
 
 header {
-  display: flex;
-  align-items: baseline;
-  gap: 1rem;
-  padding: 0.85rem 1.25rem;
-  background: rgba(255, 255, 255, 0.55);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  border-bottom: 1px solid var(--line);
+  /* Solid watercolour bar; pad past the status bar via the safe-area inset. */
+  padding: calc(env(safe-area-inset-top, 0px) + 0.7rem) 1.1rem 0.7rem;
+  background: linear-gradient(135deg, #3b82f6 0%, #1f54c4 100%);
+  color: #fff;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+  box-shadow: 0 6px 18px -10px rgba(31, 84, 196, 0.7);
   position: sticky;
   top: 0;
   z-index: 5;
 }
 header h1 {
-  font-size: 1.15rem;
+  font-size: 1.2rem;
   margin: 0;
+  font-weight: 700;
   letter-spacing: 0.2px;
-  background: linear-gradient(120deg, #1f54c4, #2f9fd6);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
+  color: #fff;
+  white-space: nowrap;
 }
 
-.health { font-size: 0.85rem; }
-.health.ok { color: var(--muted); }
-.health.warn { color: #b3261e; }
+/* Status as a small translucent chip under the title (no awkward 2-col wrap). */
+.health {
+  display: inline-block;
+  margin-top: 0.4rem;
+  font-size: 0.76rem;
+  line-height: 1.3;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.18);
+  color: #eaf1ff;
+}
+.health.warn { background: rgba(255, 226, 226, 0.92); color: #9b1c1c; }
 
 main { max-width: 56rem; margin: 1.4rem auto; padding: 0 1rem; }
 
@@ -85,7 +91,25 @@ main { max-width: 56rem; margin: 1.4rem auto; padding: 0 1rem; }
 .slot { margin: 1.1rem 0; }
 .slot > label { display: block; font-weight: 600; margin-bottom: 0.4rem; color: var(--accent-deep); }
 
-.thumbs { display: flex; flex-wrap: wrap; gap: 0.55rem; margin-top: 0.55rem; }
+/* Camera / Gallery picker buttons (hide the native file input). */
+.pick-row { display: flex; gap: 0.6rem; flex-wrap: wrap; }
+.pick-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.55rem 1rem;
+  border-radius: 999px;
+  border: 1px solid var(--accent);
+  color: var(--accent-deep);
+  background: rgba(255, 255, 255, 0.7);
+  font-weight: 600;
+  cursor: pointer;
+  user-select: none;
+}
+.pick-btn:active { transform: translateY(1px); }
+.file-input { display: none; }
+
+.thumbs { display: flex; flex-wrap: wrap; gap: 0.55rem; margin-top: 0.7rem; }
 .thumb { position: relative; }
 .thumb img {
   height: 92px;

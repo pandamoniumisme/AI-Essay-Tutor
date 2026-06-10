@@ -41,7 +41,7 @@ class AndroidBridge(
     /** Current settings (mode, provider, keys, models) as JSON. */
     @JavascriptInterface
     fun getSettings(): String =
-        Settings.toJson(Settings.load(webView.context.applicationContext))
+        Settings.uiJson(webView.context.applicationContext)
 
     /** Persist a (partial) settings JSON from the Settings screen. */
     @JavascriptInterface

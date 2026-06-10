@@ -1,12 +1,14 @@
 package com.aitutor.app
 
 import android.content.Context
+import com.aitutor.core.ModelAdvisor
 import com.aitutor.core.OnlineProvider
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
+import kotlin.math.roundToInt
 
 /** User-chosen inference settings, persisted in SharedPreferences. */
 data class AppSettings(
@@ -16,6 +18,8 @@ data class AppSettings(
     val dashscopeKey: String = "",
     val geminiModel: String = OnlineProvider.GEMINI.defaultModel,
     val dashscopeModel: String = OnlineProvider.DASHSCOPE.defaultModel,
+    // On-device model: "auto" (RAM-recommended), "qwen3.5-2b", or "qwen3.5-4b".
+    val offlineModel: String = "auto",
 ) {
     val activeProvider: OnlineProvider get() = OnlineProvider.from(provider)
     fun keyFor(p: OnlineProvider) = if (p == OnlineProvider.DASHSCOPE) dashscopeKey else geminiKey
@@ -40,6 +44,7 @@ object Settings {
                 ?: OnlineProvider.GEMINI.defaultModel,
             dashscopeModel = p.getString("dashscopeModel", OnlineProvider.DASHSCOPE.defaultModel)
                 ?: OnlineProvider.DASHSCOPE.defaultModel,
+            offlineModel = p.getString("offlineModel", "auto") ?: "auto",
         )
     }
 
@@ -56,18 +61,29 @@ object Settings {
             putString("dashscopeKey", str("dashscopeKey", cur.dashscopeKey))
             putString("geminiModel", str("geminiModel", cur.geminiModel))
             putString("dashscopeModel", str("dashscopeModel", cur.dashscopeModel))
+            putString("offlineModel", str("offlineModel", cur.offlineModel))
             apply()
         }
     }
 
-    /** Settings as JSON for the SPA settings screen. Keys are never sent raw to
-     *  logs; they go only to the WebView the user is already driving. */
-    fun toJson(s: AppSettings): String = buildJsonObject {
-        put("online", s.online)
-        put("provider", s.provider)
-        put("geminiKey", s.geminiKey)
-        put("dashscopeKey", s.dashscopeKey)
-        put("geminiModel", s.geminiModel)
-        put("dashscopeModel", s.dashscopeModel)
-    }.toString()
+    /** Settings + device info as JSON for the SPA settings screen. Keys go only
+     *  to the WebView the user is already driving, never to logs. */
+    fun uiJson(context: Context): String {
+        val s = load(context)
+        val ramBytes = DeviceRam.totalBytes(context)
+        val ramGb = (ramBytes.toDouble() / (1024 * 1024 * 1024) * 10).roundToInt() / 10.0
+        val rec = ModelAdvisor.recommend(ramBytes)
+        return buildJsonObject {
+            put("online", s.online)
+            put("provider", s.provider)
+            put("geminiKey", s.geminiKey)
+            put("dashscopeKey", s.dashscopeKey)
+            put("geminiModel", s.geminiModel)
+            put("dashscopeModel", s.dashscopeModel)
+            put("offlineModel", s.offlineModel)
+            put("ramGb", ramGb)
+            put("recommendedModel", rec.id)
+            put("recommendedModelName", rec.displayName)
+        }.toString()
+    }
 }
