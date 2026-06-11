@@ -272,6 +272,7 @@ table.scores td { background: rgba(255, 255, 255, 0.6); }
 }
 .online-block label { display: block; font-weight: 600; margin: 0.6rem 0 0.25rem; color: var(--accent-deep); }
 .online-block label:first-child { margin-top: 0; }
+.mem-warn { font-size: 0.85rem; color: #b3261e; }
 
 .hidden { display: none; }
 

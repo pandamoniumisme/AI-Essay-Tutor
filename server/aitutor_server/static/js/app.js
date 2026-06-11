@@ -187,19 +187,15 @@ function renderCapture() {
 function renderSettings() {
   const root = app();
   clear(root);
-  const s = api.getSettings() || { online: false, hfToken: "", hfModel: "", offlineModel: "auto", ramGb: 0, recommendedModelName: "Qwen3.5-2B" };
+  const s = api.getSettings() || { online: false, hfToken: "", hfModel: "", offlineModelName: "Qwen3.5-4B", ramGb: 0, minMemoryGb: 10.5 };
 
-  // --- offline block: recommended model + 2B/4B choice ---
+  // --- offline block: fixed to Qwen3.5-4B; show the memory requirement ---
+  const enough = !s.ramGb || s.ramGb >= s.minMemoryGb;
   const offlineBlock = h("div", { class: "online-block" + (s.online ? " hidden" : "") },
-    h("p", { class: "hint" },
-      `This device has ${s.ramGb} GB RAM — recommended: ${s.recommendedModelName}.`),
-    h("label", {}, "On-device model"),
-    h("select", { onchange: (e) => { s.offlineModel = e.target.value; } },
-      h("option", { value: "auto", selected: s.offlineModel === "auto" },
-        `Recommended (${s.recommendedModelName})`),
-      h("option", { value: "qwen3.5-2b", selected: s.offlineModel === "qwen3.5-2b" }, "Qwen3.5-2B (smaller, fits 8 GB)"),
-      h("option", { value: "qwen3.5-4b", selected: s.offlineModel === "qwen3.5-4b" }, "Qwen3.5-4B (better, needs ~12 GB)")),
-    h("p", { class: "hint" }, "4B may be too large for phones under 12 GB."));
+    h("p", {}, `On-device model: ${s.offlineModelName}.`),
+    h("p", { class: enough ? "hint" : "mem-warn" },
+      `The offline model needs at least ${s.minMemoryGb} GB in memory for ` +
+      `recommended performance. Your system has ${s.ramGb} GB.`));
 
   const keyInput = h("input", { type: "password", class: "edit", placeholder: "hf_…", value: s.hfToken || "" });
   const modelInput = h("input", { type: "text", class: "edit", placeholder: "Qwen/Qwen3.5-9B", value: s.hfModel || "" });

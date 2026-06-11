@@ -33,11 +33,8 @@ class LlamaInference(
     private val json: Json,
 ) : Inference {
 
-    // The user's Settings pick ("auto" -> RAM-recommended), else the named 2B/4B.
-    private val recommended by lazy {
-        com.aitutor.core.ModelChoice.fromId(Settings.load(context).offlineModel)
-            ?: DeviceRam.recommend(context)
-    }
+    // On-device is fixed to Qwen3.5-4B.
+    private val recommended = com.aitutor.core.ModelChoice.QWEN_4B
     private val files by lazy { ModelRepo.filesFor(recommended) }
     private val modelDir get() = File(context.filesDir, "models")
     private val downloader by lazy { ModelDownloader(modelDir) }
