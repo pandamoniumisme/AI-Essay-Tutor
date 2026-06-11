@@ -31,7 +31,6 @@ object ModelStatus {
         return buildJsonObject {
             put("ok", true)
             put("on_device", true)
-            put("gemini_key_present", false)
             put("ram_gb", ramGb)
             put("recommended_model", rec.id)
             put("recommended_model_name", rec.displayName)

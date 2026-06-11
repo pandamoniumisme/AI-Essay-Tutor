@@ -6,28 +6,29 @@ against the PSLE rubric, and shows redline corrections, comments, and an
 improved version — like a teacher marking the page.
 
 Two builds share one front-end:
-- **Web app** (`server/`) — online inference via Gemini or Alibaba Cloud (Qwen).
-- **Android app** (`android/`) — fully on-device Qwen3.5 (2B/4B). See `android/`.
+- **Web app** (`server/`) — online inference via Hugging Face (Qwen3.5-9B).
+- **Android app** (`android/`) — on-device Qwen3.5 (2B/4B), or the same
+  Hugging Face online option. See `android/`.
 
 **Status:** in development. See `docs/web-solution-plan.md` for the full design.
 
 ## Web architecture
 
 A local FastAPI server on `127.0.0.1` serves the browser UI and a JSON API.
-Online inference goes to one of two interchangeable **OpenAI-compatible**
-providers, selected by `AITUTOR_PROVIDER`.
+Online inference goes to **Hugging Face Inference Providers** (OpenAI-compatible
+router) running **Qwen3.5-9B**.
 
 ```
-Browser SPA ──fetch──▶ server/ FastAPI (local) ──HTTPS──▶ Gemini | Alibaba Cloud (Qwen)
+Browser SPA ──fetch──▶ server/ FastAPI (local) ──HTTPS──▶ Hugging Face (Qwen3.5-9B)
  (capture →                  │  /api/transcribe   transcription (OCR + caption)
-  review →                   │  /api/grade        rubric grade (JSON-constrained)
+  review →                   │  /api/grade        rubric grade (JSON via prompt+validate)
   annotated results)         │  /api/health
 ```
 
-> **Privacy note:** essays are sent to the chosen provider for processing. These
-> are children's essays — see the privacy section of `docs/web-solution-plan.md`
-> before using on real student work. (The Android build keeps everything
-> on-device.)
+> **Privacy note:** essays are sent to Hugging Face for processing. These are
+> children's essays — see the privacy section of `docs/web-solution-plan.md`
+> before using on real student work. (The Android on-device mode keeps
+> everything on the phone.)
 
 ## Layout
 
@@ -45,8 +46,8 @@ Browser SPA ──fetch──▶ server/ FastAPI (local) ──HTTPS──▶ Ge
 # One-time: create venv + install deps (no model download)
 .\scripts\bootstrap_server.ps1
 
-# Set your provider key (Gemini shown; or DASHSCOPE_API_KEY for Alibaba Cloud)
-$env:GEMINI_API_KEY = "your-key-here"
+# Set your Hugging Face token
+$env:HF_TOKEN = "hf_your-token-here"
 
 # Run the app (opens http://127.0.0.1:8765 in the browser)
 .\scripts\run_server_dev.ps1
@@ -56,11 +57,8 @@ Config via environment (or `.env` — see `.env.example`):
 
 | Var | Default | Purpose |
 |---|---|---|
-| `AITUTOR_PROVIDER` | `gemini` | `gemini` or `dashscope` |
-| `GEMINI_API_KEY` | — | Gemini key (or `gemini_api_key` in `config.json`) |
-| `AITUTOR_GEMINI_MODEL` | `gemini-3.5-flash` | Gemini model id |
-| `DASHSCOPE_API_KEY` | — | Alibaba Cloud Model Studio key |
-| `AITUTOR_DASHSCOPE_MODEL` | `qwen3.5-flash` | Qwen model id |
+| `HF_TOKEN` | — | Hugging Face token (or `hf_token` in `config.json`) |
+| `AITUTOR_HF_MODEL` | `Qwen/Qwen3.5-9B` | model id (append `:cheapest`/`:provider` to route) |
 
 ## Front-end
 

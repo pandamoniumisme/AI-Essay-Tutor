@@ -1,6 +1,7 @@
 package com.aitutor.app
 
 import android.content.Context
+import com.aitutor.core.OnlineProvider
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonObject
@@ -15,10 +16,8 @@ class RouterInference(private val context: Context, private val json: Json) : In
 
     private val offline by lazy { Inference.offline(context, json) }
 
-    private fun online(s: AppSettings): OnlineInference {
-        val p = s.activeProvider
-        return OnlineInference(context, p, s.keyFor(p), s.modelFor(p), json)
-    }
+    private fun online(s: AppSettings): OnlineInference =
+        OnlineInference(context, OnlineProvider.HUGGINGFACE, s.hfToken, s.hfModelResolved(), json)
 
     override suspend fun transcribe(payloadJson: String, onProgress: ProgressCb): String {
         val s = Settings.load(context)

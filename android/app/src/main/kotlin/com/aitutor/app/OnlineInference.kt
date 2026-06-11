@@ -29,7 +29,7 @@ import java.net.HttpURLConnection
 import java.net.URL
 
 /**
- * Online inference via an OpenAI-compatible provider (Gemini or Alibaba/Qwen).
+ * Online inference via Hugging Face Inference Providers (OpenAI-compatible).
  * Mirrors the server's providers/client.py, in Kotlin, reusing the shared
  * `core` prompts / schema / validation. Runs natively (not from the WebView)
  * because a browser-origin fetch to these endpoints would be blocked by CORS.
@@ -94,16 +94,16 @@ class OnlineInference(
             addJsonObject { put("role", "system"); put("content", system) }
             addJsonObject { put("role", "user"); put("content", user) }
         }
-        val responseFormat = if (provider.structured == "json_schema") {
-            buildJsonObject {
+        val responseFormat = when (provider.structured) {
+            "json_schema" -> buildJsonObject {
                 put("type", "json_schema")
                 putJsonObject("json_schema") {
                     put("name", "grade_response")
                     put("schema", GradeSchema.build(req))
                 }
             }
-        } else {
-            buildJsonObject { put("type", "json_object") }
+            "json_object" -> buildJsonObject { put("type", "json_object") }
+            else -> null  // "none": rely on prompt + lenient parse/validate
         }
 
         val raw = chat(messages, responseFormat, maxTokens = 1800)

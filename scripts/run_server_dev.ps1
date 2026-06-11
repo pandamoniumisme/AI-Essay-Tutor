@@ -21,10 +21,10 @@ if (-not (Test-Path $venvPython)) {
     exit 1
 }
 
-if (-not ($env:GEMINI_API_KEY)) {
+if (-not ($env:HF_TOKEN)) {
     $configFile = Join-Path $env:APPDATA "AIEssayTutor\config.json"
     if (-not (Test-Path $configFile)) {
-        Write-Warning "No GEMINI_API_KEY set and no config.json; /api calls will 503 until you add a key."
+        Write-Warning "No HF_TOKEN set and no config.json; /api calls will 503 until you add a token."
     }
 }
 

@@ -1,9 +1,9 @@
-"""OpenAI-compatible backend shared by both online providers.
+"""OpenAI-compatible backend for the online provider (Hugging Face / Qwen3.5-9B).
 
-Gemini and Alibaba Cloud (Qwen) both expose OpenAI-compatible chat endpoints,
-so one implementation serves both — only the base URL, key, and model differ
-(see config.py). Vision goes through an inline base64 ``image_url`` part;
-grading uses ``response_format`` (json_schema for Gemini, json_object for Qwen).
+Vision goes through an inline base64 ``image_url`` part; grading optionally uses
+``response_format`` per the provider's ``structured`` mode (currently "none" for
+HF — we rely on the prompt + lenient parse/validate). Base URL, key, and model
+come from config.py.
 """
 from __future__ import annotations
 
@@ -69,8 +69,10 @@ def generate_text(system: str, user: str, json_schema: dict | None = None,
                 "type": "json_schema",
                 "json_schema": {"name": "grade_response", "schema": json_schema},
             }
-        else:  # json_object: rely on the prompt to specify the shape
+        elif mode == "json_object":
             kwargs["response_format"] = {"type": "json_object"}
+        # mode == "none": don't force a response_format; the prompt + lenient
+        # parse/validate handle JSON extraction (broadest provider support).
 
     resp = _get_client().chat.completions.create(
         model=config.model(),

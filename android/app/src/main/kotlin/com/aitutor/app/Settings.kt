@@ -12,21 +12,13 @@ import kotlin.math.roundToInt
 
 /** User-chosen inference settings, persisted in SharedPreferences. */
 data class AppSettings(
-    val online: Boolean = false,            // false = on-device, true = online provider
-    val provider: String = "gemini",        // "gemini" | "dashscope"
-    val geminiKey: String = "",
-    val dashscopeKey: String = "",
-    val geminiModel: String = OnlineProvider.GEMINI.defaultModel,
-    val dashscopeModel: String = OnlineProvider.DASHSCOPE.defaultModel,
+    val online: Boolean = false,            // false = on-device, true = Hugging Face
+    val hfToken: String = "",
+    val hfModel: String = OnlineProvider.HUGGINGFACE.defaultModel,
     // On-device model: "auto" (RAM-recommended), "qwen3.5-2b", or "qwen3.5-4b".
     val offlineModel: String = "auto",
 ) {
-    val activeProvider: OnlineProvider get() = OnlineProvider.from(provider)
-    fun keyFor(p: OnlineProvider) = if (p == OnlineProvider.DASHSCOPE) dashscopeKey else geminiKey
-    fun modelFor(p: OnlineProvider): String {
-        val m = if (p == OnlineProvider.DASHSCOPE) dashscopeModel else geminiModel
-        return m.ifBlank { p.defaultModel }
-    }
+    fun hfModelResolved(): String = hfModel.ifBlank { OnlineProvider.HUGGINGFACE.defaultModel }
 }
 
 object Settings {
@@ -37,13 +29,9 @@ object Settings {
         val p = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         return AppSettings(
             online = p.getBoolean("online", false),
-            provider = p.getString("provider", "gemini") ?: "gemini",
-            geminiKey = p.getString("geminiKey", "") ?: "",
-            dashscopeKey = p.getString("dashscopeKey", "") ?: "",
-            geminiModel = p.getString("geminiModel", OnlineProvider.GEMINI.defaultModel)
-                ?: OnlineProvider.GEMINI.defaultModel,
-            dashscopeModel = p.getString("dashscopeModel", OnlineProvider.DASHSCOPE.defaultModel)
-                ?: OnlineProvider.DASHSCOPE.defaultModel,
+            hfToken = p.getString("hfToken", "") ?: "",
+            hfModel = p.getString("hfModel", OnlineProvider.HUGGINGFACE.defaultModel)
+                ?: OnlineProvider.HUGGINGFACE.defaultModel,
             offlineModel = p.getString("offlineModel", "auto") ?: "auto",
         )
     }
@@ -56,18 +44,14 @@ object Settings {
         fun bool(k: String, d: Boolean) = o[k]?.jsonPrimitive?.content?.toBooleanStrictOrNull() ?: d
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().apply {
             putBoolean("online", bool("online", cur.online))
-            putString("provider", str("provider", cur.provider))
-            putString("geminiKey", str("geminiKey", cur.geminiKey))
-            putString("dashscopeKey", str("dashscopeKey", cur.dashscopeKey))
-            putString("geminiModel", str("geminiModel", cur.geminiModel))
-            putString("dashscopeModel", str("dashscopeModel", cur.dashscopeModel))
+            putString("hfToken", str("hfToken", cur.hfToken))
+            putString("hfModel", str("hfModel", cur.hfModel))
             putString("offlineModel", str("offlineModel", cur.offlineModel))
             apply()
         }
     }
 
-    /** Settings + device info as JSON for the SPA settings screen. Keys go only
-     *  to the WebView the user is already driving, never to logs. */
+    /** Settings + device info as JSON for the SPA settings screen. */
     fun uiJson(context: Context): String {
         val s = load(context)
         val ramBytes = DeviceRam.totalBytes(context)
@@ -75,11 +59,8 @@ object Settings {
         val rec = ModelAdvisor.recommend(ramBytes)
         return buildJsonObject {
             put("online", s.online)
-            put("provider", s.provider)
-            put("geminiKey", s.geminiKey)
-            put("dashscopeKey", s.dashscopeKey)
-            put("geminiModel", s.geminiModel)
-            put("dashscopeModel", s.dashscopeModel)
+            put("hfToken", s.hfToken)
+            put("hfModel", s.hfModel)
             put("offlineModel", s.offlineModel)
             put("ramGb", ramGb)
             put("recommendedModel", rec.id)

@@ -88,4 +88,4 @@ cd android && gradle :app:assembleDebug   # requires ANDROID_HOME + SDK
 Small models can "summarise instead of transcribe" handwriting. Run the
 **Phase 0 desktop quality gate** (Qwen3.5-2B vs `samples/` ground truth) before
 investing in the native layer. The transcription-review screen and an optional
-Gemini fallback are the safety nets.
+Hugging Face online option are the safety nets.

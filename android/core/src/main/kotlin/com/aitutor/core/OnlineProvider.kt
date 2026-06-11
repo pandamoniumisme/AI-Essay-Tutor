@@ -1,8 +1,7 @@
 package com.aitutor.core
 
-// The online providers the Android app can call (mirrors the server's
-// providers/config.py). Both are OpenAI-compatible, so the app uses one HTTP
-// client parameterised by these fields.
+// The online backend the app can call: Hugging Face Inference Providers
+// (OpenAI-compatible router). Mirrors the server's providers/config.py.
 
 enum class OnlineProvider(
     val id: String,
@@ -10,23 +9,19 @@ enum class OnlineProvider(
     /** OpenAI-compatible base; chatUrl() appends "chat/completions". */
     val baseUrl: String,
     val defaultModel: String,
-    /** How this endpoint enforces JSON grade output. */
+    /** How JSON grade output is constrained: "json_schema" | "json_object" | "none". */
     val structured: String,
 ) {
-    GEMINI(
-        "gemini", "Gemini",
-        "https://generativelanguage.googleapis.com/v1beta/openai/",
-        "gemini-3.5-flash", "json_schema",
-    ),
-    DASHSCOPE(
-        "dashscope", "Alibaba Cloud (Qwen)",
-        "https://dashscope-intl.aliyuncs.com/compatible-mode/v1/",
-        "qwen3.5-flash", "json_object",
+    HUGGINGFACE(
+        "huggingface", "Hugging Face",
+        "https://router.huggingface.co/v1/",
+        "Qwen/Qwen3.5-9B", "none",
     );
 
     fun chatUrl(): String = baseUrl.trimEnd('/') + "/chat/completions"
 
     companion object {
-        fun from(id: String?): OnlineProvider = entries.firstOrNull { it.id == id } ?: GEMINI
+        val DEFAULT = HUGGINGFACE
+        fun from(id: String?): OnlineProvider = DEFAULT
     }
 }

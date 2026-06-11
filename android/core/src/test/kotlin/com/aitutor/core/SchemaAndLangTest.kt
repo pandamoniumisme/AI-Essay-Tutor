@@ -32,17 +32,12 @@ class SchemaAndLangTest {
     }
 
     @Test
-    fun onlineProviderUrls() {
-        assertEquals(OnlineProvider.GEMINI, OnlineProvider.from("gemini"))
-        assertEquals(OnlineProvider.DASHSCOPE, OnlineProvider.from("dashscope"))
-        assertEquals(OnlineProvider.GEMINI, OnlineProvider.from(null))  // default
+    fun onlineProviderUrl() {
+        assertEquals(OnlineProvider.HUGGINGFACE, OnlineProvider.from(null))
+        assertEquals("Qwen/Qwen3.5-9B", OnlineProvider.HUGGINGFACE.defaultModel)
         assertEquals(
-            "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
-            OnlineProvider.GEMINI.chatUrl(),
-        )
-        assertEquals(
-            "https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions",
-            OnlineProvider.DASHSCOPE.chatUrl(),
+            "https://router.huggingface.co/v1/chat/completions",
+            OnlineProvider.HUGGINGFACE.chatUrl(),
         )
     }
 

@@ -1,8 +1,6 @@
-"""POST /api/transcribe -- OCR + picture description via Gemini.
+"""POST /api/transcribe -- OCR + picture description via the online provider.
 
-Synchronous: the browser shows a spinner while this runs. Gemini calls take
-seconds (not the minutes the local NPU stack did), so there is no async job
-queue anymore.
+Synchronous: the browser shows a spinner while this runs.
 """
 from __future__ import annotations
 

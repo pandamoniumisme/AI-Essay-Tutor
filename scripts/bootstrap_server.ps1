@@ -6,9 +6,9 @@
 .DESCRIPTION
   Creates a Python venv at %LOCALAPPDATA%\AIEssayTutor\venv and installs the
   server package (editable, so the developer can edit the server\ tree in
-  place). Inference is delegated to the Gemini API, so there is NO multi-GB
-  model download anymore -- just set a GEMINI_API_KEY (see the end of this
-  script) and run the dev server.
+  place). Online inference goes to Hugging Face (Qwen3.5-9B), so there is NO
+  multi-GB model download -- just set an HF_TOKEN (see the end of this script)
+  and run the dev server.
 
 .EXAMPLE
   .\scripts\bootstrap_server.ps1
@@ -119,14 +119,14 @@ Write-Host "`nInstalling server package (editable)..."
 & $venvPython -m pip install --editable (Join-Path $repoRoot "server")
 if ($LASTEXITCODE -ne 0) { Write-Error "pip install failed"; exit 1 }
 
-# --- 3. Gemini API key reminder -----------------------------------------
+# --- 3. Hugging Face token reminder -------------------------------------
 $configFile = Join-Path $env:APPDATA "AIEssayTutor\config.json"
-if (-not ($env:GEMINI_API_KEY) -and -not (Test-Path $configFile)) {
-    Write-Host "`nNo Gemini API key found." -ForegroundColor Yellow
+if (-not ($env:HF_TOKEN) -and -not (Test-Path $configFile)) {
+    Write-Host "`nNo Hugging Face token found." -ForegroundColor Yellow
     Write-Host "Set one before running the server, e.g.:"
-    Write-Host '    $env:GEMINI_API_KEY = "your-key-here"' -ForegroundColor Gray
+    Write-Host '    $env:HF_TOKEN = "hf_your-token-here"' -ForegroundColor Gray
     Write-Host "  or create $configFile with:"
-    Write-Host '    { "gemini_api_key": "your-key-here" }' -ForegroundColor Gray
+    Write-Host '    { "hf_token": "hf_your-token-here" }' -ForegroundColor Gray
 }
 
 Write-Host "`nDone." -ForegroundColor Green

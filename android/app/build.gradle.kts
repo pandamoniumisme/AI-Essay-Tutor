@@ -48,7 +48,7 @@ dependencies {
 // assets at build time instead of forking them.
 val copyAssets by tasks.registering(Copy::class) {
     from("../../server/aitutor_server/static") { into("www") }
-    from("../../server/aitutor_server/gemini/prompts") { into("prompts") }
+    from("../../server/aitutor_server/providers/prompts") { into("prompts") }
     into(layout.projectDirectory.dir("src/main/assets"))
 }
 tasks.named("preBuild") { dependsOn(copyAssets) }

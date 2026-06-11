@@ -157,9 +157,10 @@ function renderCapture() {
   let privacy;
   if (settings && !settings.online) {
     privacy = "Everything stays on your device — nothing is uploaded.";
+  } else if (settings) {
+    privacy = "Photos and text are sent to Hugging Face (Qwen3.5-9B) for processing.";
   } else {
-    const label = providerLabel((settings && settings.provider) || null);
-    privacy = `Photos and text are sent to ${label} for processing.`;
+    privacy = "Photos and text are sent to the configured AI provider for processing.";
   }
 
   const actions = h("div", { class: "actions" },
@@ -181,18 +182,12 @@ function renderCapture() {
     actions));
 }
 
-function providerLabel(id) {
-  if (id === "dashscope") return "Alibaba Cloud (Qwen)";
-  if (id === "gemini") return "Gemini";
-  return "your configured AI provider";
-}
-
 // --- settings screen (Android only) --------------------------------------
 
 function renderSettings() {
   const root = app();
   clear(root);
-  const s = api.getSettings() || { online: false, provider: "gemini", geminiKey: "", dashscopeKey: "", geminiModel: "", dashscopeModel: "", offlineModel: "auto", ramGb: 0, recommendedModelName: "Qwen3.5-2B" };
+  const s = api.getSettings() || { online: false, hfToken: "", hfModel: "", offlineModel: "auto", ramGb: 0, recommendedModelName: "Qwen3.5-2B" };
 
   // --- offline block: recommended model + 2B/4B choice ---
   const offlineBlock = h("div", { class: "online-block" + (s.online ? " hidden" : "") },
@@ -206,36 +201,19 @@ function renderSettings() {
       h("option", { value: "qwen3.5-4b", selected: s.offlineModel === "qwen3.5-4b" }, "Qwen3.5-4B (better, needs ~12 GB)")),
     h("p", { class: "hint" }, "4B may be too large for phones under 12 GB."));
 
-  const onlineBlock = h("div", { class: "online-block" + (s.online ? "" : " hidden") });
-  const keyInput = h("input", { type: "password", class: "edit", placeholder: "Paste API key" });
-  const modelInput = h("input", { type: "text", class: "edit" });
-  const providerSel = h("select", {
-    onchange: (e) => { s.provider = e.target.value; syncProviderFields(); },
-  },
-    h("option", { value: "gemini", selected: s.provider === "gemini" }, "Gemini"),
-    h("option", { value: "dashscope", selected: s.provider === "dashscope" }, "Alibaba Cloud (Qwen)"));
+  const keyInput = h("input", { type: "password", class: "edit", placeholder: "hf_…", value: s.hfToken || "" });
+  const modelInput = h("input", { type: "text", class: "edit", placeholder: "Qwen/Qwen3.5-9B", value: s.hfModel || "" });
+  keyInput.addEventListener("input", () => { s.hfToken = keyInput.value; });
+  modelInput.addEventListener("input", () => { s.hfModel = modelInput.value; });
 
-  function syncProviderFields() {
-    const isDash = s.provider === "dashscope";
-    keyInput.value = isDash ? s.dashscopeKey : s.geminiKey;
-    modelInput.value = isDash ? s.dashscopeModel : s.geminiModel;
-    modelInput.placeholder = isDash ? "qwen3.5-flash" : "gemini-3.5-flash";
-  }
-  keyInput.addEventListener("input", () => {
-    if (s.provider === "dashscope") s.dashscopeKey = keyInput.value; else s.geminiKey = keyInput.value;
-  });
-  modelInput.addEventListener("input", () => {
-    if (s.provider === "dashscope") s.dashscopeModel = modelInput.value; else s.geminiModel = modelInput.value;
-  });
-  syncProviderFields();
-
-  onlineBlock.appendChild(h("label", {}, "Provider"));
-  onlineBlock.appendChild(providerSel);
-  onlineBlock.appendChild(h("label", {}, "API key"));
-  onlineBlock.appendChild(keyInput);
-  onlineBlock.appendChild(h("label", {}, "Model (optional)"));
-  onlineBlock.appendChild(modelInput);
-  onlineBlock.appendChild(h("p", { class: "hint" }, "Essays are sent to this provider when online."));
+  const onlineBlock = h("div", { class: "online-block" + (s.online ? "" : " hidden") },
+    h("label", {}, "Hugging Face token"),
+    keyInput,
+    h("label", {}, "Model (optional)"),
+    modelInput,
+    h("p", { class: "hint" },
+      "Essays are sent to Hugging Face (Qwen3.5-9B) when online. " +
+      "Token: huggingface.co/settings/tokens"));
 
   const modeRadio = (online, text, sub) =>
     h("label", { class: "radio mode" },

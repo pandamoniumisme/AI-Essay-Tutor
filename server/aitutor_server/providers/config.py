@@ -1,14 +1,11 @@
 """Online provider configuration.
 
-Two interchangeable online backends, both reached over an OpenAI-compatible
-endpoint (so a single client implementation serves both):
+A single online backend: **Hugging Face Inference Providers**, reached over its
+OpenAI-compatible router. Default model is Qwen3.5-9B.
 
-  - gemini    : Google Gemini (default gemini-3.5-flash)
-  - dashscope : Alibaba Cloud Model Studio / Qwen (default qwen3.5-flash)
-
-Select with AITUTOR_PROVIDER=gemini|dashscope (default gemini). Keys come from
-the provider's env var(s), falling back to config.json. Model ids are
-overridable per provider without a code change.
+Key from ``HF_TOKEN`` (or ``HUGGINGFACE_API_KEY``), falling back to
+``hf_token`` in config.json. Model overridable via ``AITUTOR_HF_MODEL`` (e.g.
+append ``:cheapest`` or a ``:provider`` suffix to pick routing).
 """
 from __future__ import annotations
 
@@ -23,34 +20,24 @@ class MissingApiKey(RuntimeError):
     """Raised when the active provider has no API key configured."""
 
 
-# name -> settings. ``structured`` is how this endpoint enforces JSON output:
-# Gemini's OpenAI layer supports json_schema; Qwen uses json_object.
+# ``structured`` = how JSON grade output is constrained. HF routes to many
+# providers with mixed response_format support, so we force nothing ("none")
+# and rely on the prompt + lenient parse/validate.
 PROVIDERS: dict[str, dict] = {
-    "gemini": {
-        "label": "Gemini",
-        "base_url": "https://generativelanguage.googleapis.com/v1beta/openai/",
-        "key_env": ("GEMINI_API_KEY", "GOOGLE_API_KEY"),
-        "config_key": "gemini_api_key",
-        "default_model": "gemini-3.5-flash",
-        "model_env": "AITUTOR_GEMINI_MODEL",
-        "structured": "json_schema",
-    },
-    "dashscope": {
-        "label": "Alibaba Cloud (Qwen)",
-        # Singapore (international) region. Use dashscope.aliyuncs.com for Beijing.
-        "base_url": "https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
-        "key_env": ("DASHSCOPE_API_KEY",),
-        "config_key": "dashscope_api_key",
-        "default_model": "qwen3.5-flash",
-        "model_env": "AITUTOR_DASHSCOPE_MODEL",
-        "structured": "json_object",
+    "huggingface": {
+        "label": "Hugging Face",
+        "base_url": "https://router.huggingface.co/v1",
+        "key_env": ("HF_TOKEN", "HUGGINGFACE_API_KEY"),
+        "config_key": "hf_token",
+        "default_model": "Qwen/Qwen3.5-9B",
+        "model_env": "AITUTOR_HF_MODEL",
+        "structured": "none",
     },
 }
 
 
 def _load_dotenv_once() -> None:
-    """Load .env from the working dir into the environment (no override). Keeps
-    the 'put keys in .env and run' path working with no extra dependency."""
+    """Load .env from the working dir into the environment (no override)."""
     if getattr(_load_dotenv_once, "_done", False):
         return
     _load_dotenv_once._done = True  # type: ignore[attr-defined]
@@ -71,9 +58,7 @@ def _load_dotenv_once() -> None:
 
 
 def active_name() -> str:
-    _load_dotenv_once()
-    name = os.environ.get("AITUTOR_PROVIDER", "gemini").lower()
-    return name if name in PROVIDERS else "gemini"
+    return "huggingface"
 
 
 def settings() -> dict:
@@ -81,6 +66,7 @@ def settings() -> dict:
 
 
 def model() -> str:
+    _load_dotenv_once()
     s = settings()
     return os.environ.get(s["model_env"], s["default_model"])
 

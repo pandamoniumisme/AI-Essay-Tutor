@@ -1,4 +1,4 @@
-"""POST /api/grade -- run the Gemini grader over the supplied text."""
+"""POST /api/grade -- run the grader over the supplied text."""
 from __future__ import annotations
 
 import logging
