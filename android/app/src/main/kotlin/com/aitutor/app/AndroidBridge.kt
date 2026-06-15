@@ -8,6 +8,8 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 
 /**
  * The object exposed to JS as window.AndroidBridge. Each long-running method
@@ -47,6 +49,20 @@ class AndroidBridge(
     @JavascriptInterface
     fun setSettings(payloadJson: String) =
         Settings.save(webView.context.applicationContext, payloadJson)
+
+    /** Probe a local-network server's reachability (Settings "Test connection").
+     *  Lightweight — no foreground service. Resolves {ok, detail}. */
+    @JavascriptInterface
+    fun pingServer(token: String, payloadJson: String) {
+        scope.launch {
+            try {
+                val url = Json.parseToJsonElement(payloadJson).jsonObject["url"]?.jsonPrimitive?.content ?: ""
+                resolve(token, LocalServer.probe(url))
+            } catch (e: Throwable) {
+                reject(token, e.message ?: "ping failed")
+            }
+        }
+    }
 
     private fun run(token: String, work: suspend () -> String) {
         val ctx = webView.context.applicationContext

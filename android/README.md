@@ -25,6 +25,22 @@ build copies the SPA + grader prompts into `app/src/main/assets/` (no fork).
 `core` is a composite build (`includeBuild("core")`) so it compiles and tests on
 a plain JVM — that's where the risky ported logic is verified.
 
+## Inference modes (Settings)
+
+Three modes, switchable per request:
+- **On-device** — Qwen3.5-4B via llama.cpp, fully offline. Settings shows the
+  memory the model needs vs the device's RAM.
+- **Local network server** — a Qwen3.6-35B server you run on the LAN (Ollama /
+  llama.cpp / LM Studio) over its OpenAI-compatible API. Enter the base URL
+  (e.g. `http://192.168.1.50:11434/v1`) + model; a **Test connection** button
+  probes reachability. Essays stay on your network. (Cleartext HTTP to the LAN
+  is allowed via `usesCleartextTraffic`.)
+- **Hugging Face (cloud)** — Qwen3.5-9B via the HF router; needs an `HF_TOKEN`.
+
+The native `OnlineInference` client serves both the local and HF endpoints
+(same OpenAI-compatible shape); calls run natively, not from the WebView, to
+avoid CORS.
+
 ## Model recommendation at setup
 
 Before any download, setup reads the device's total RAM (`DeviceRam`) and

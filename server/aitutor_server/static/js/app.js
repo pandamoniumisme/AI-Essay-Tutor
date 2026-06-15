@@ -78,7 +78,7 @@ async function refreshHealth() {
       el.textContent = `${hh.provider_label || hh.provider} · ${hh.model}`;
     } else {
       el.className = "health warn";
-      el.textContent = `No API key for ${hh.provider_label || hh.provider || "the provider"} — set it and restart.`;
+      el.textContent = `${hh.provider_label || hh.provider || "Provider"} not configured — open Settings.`;
     }
   } catch {
     el.className = "health warn";
@@ -155,8 +155,10 @@ function renderCapture() {
 
   const settings = api.getSettings();   // null on the web build
   let privacy;
-  if (settings && !settings.online) {
+  if (settings && settings.mode === "offline") {
     privacy = "Everything stays on your device — nothing is uploaded.";
+  } else if (settings && settings.mode === "local") {
+    privacy = "Photos and text go to your local network server — they stay on your network.";
   } else if (settings) {
     privacy = "Photos and text are sent to Hugging Face (Qwen3.5-9B) for processing.";
   } else {
@@ -187,48 +189,78 @@ function renderCapture() {
 function renderSettings() {
   const root = app();
   clear(root);
-  const s = api.getSettings() || { online: false, hfToken: "", hfModel: "", offlineModelName: "Qwen3.5-4B", ramGb: 0, minMemoryGb: 10.5 };
+  const s = api.getSettings() || {
+    mode: "offline", hfToken: "", hfModel: "", localUrl: "", localModel: "qwen3.6:35b",
+    offlineModelName: "Qwen3.5-4B", ramGb: 0, minMemoryGb: 10.5,
+  };
 
-  // --- offline block: fixed to Qwen3.5-4B; show the memory requirement ---
+  // --- on-device block (fixed Qwen3.5-4B; memory requirement) ---
   const enough = !s.ramGb || s.ramGb >= s.minMemoryGb;
-  const offlineBlock = h("div", { class: "online-block" + (s.online ? " hidden" : "") },
+  const offlineBlock = h("div", { class: "online-block" + (s.mode === "offline" ? "" : " hidden") },
     h("p", {}, `On-device model: ${s.offlineModelName}.`),
     h("p", { class: enough ? "hint" : "mem-warn" },
       `The offline model needs at least ${s.minMemoryGb} GB in memory for ` +
       `recommended performance. Your system has ${s.ramGb} GB.`));
 
+  // --- local network server block ---
+  const localUrlInput = h("input", { type: "text", class: "edit", placeholder: "http://192.168.1.50:11434/v1", value: s.localUrl || "" });
+  const localModelInput = h("input", { type: "text", class: "edit", placeholder: "qwen3.6:35b", value: s.localModel || "" });
+  localUrlInput.addEventListener("input", () => { s.localUrl = localUrlInput.value; });
+  localModelInput.addEventListener("input", () => { s.localModel = localModelInput.value; });
+  const localStatus = h("p", { class: "hint" }, "");
+  const testBtn = h("button", {
+    onclick: async () => {
+      localStatus.className = "hint"; localStatus.textContent = "Testing…";
+      try {
+        const r = await api.pingLocal(localUrlInput.value);
+        localStatus.className = r.ok ? "hint ok-text" : "mem-warn";
+        localStatus.textContent = r.detail || (r.ok ? "Reachable." : "Not reachable.");
+      } catch (e) {
+        localStatus.className = "mem-warn"; localStatus.textContent = e.message;
+      }
+    },
+  }, "Test connection");
+  const localBlock = h("div", { class: "online-block" + (s.mode === "local" ? "" : " hidden") },
+    h("label", {}, "Server URL"),
+    localUrlInput,
+    h("label", {}, "Model"),
+    localModelInput,
+    h("div", { class: "actions" }, testBtn),
+    localStatus,
+    h("p", { class: "hint" }, "Your Qwen server (Ollama / llama.cpp) on the same Wi-Fi. Essays stay on your network."));
+
+  // --- Hugging Face block ---
   const keyInput = h("input", { type: "password", class: "edit", placeholder: "hf_…", value: s.hfToken || "" });
   const modelInput = h("input", { type: "text", class: "edit", placeholder: "Qwen/Qwen3.5-9B", value: s.hfModel || "" });
   keyInput.addEventListener("input", () => { s.hfToken = keyInput.value; });
   modelInput.addEventListener("input", () => { s.hfModel = modelInput.value; });
-
-  const onlineBlock = h("div", { class: "online-block" + (s.online ? "" : " hidden") },
+  const hfBlock = h("div", { class: "online-block" + (s.mode === "hf" ? "" : " hidden") },
     h("label", {}, "Hugging Face token"),
     keyInput,
     h("label", {}, "Model (optional)"),
     modelInput,
-    h("p", { class: "hint" },
-      "Essays are sent to Hugging Face (Qwen3.5-9B) when online. " +
-      "Token: huggingface.co/settings/tokens"));
+    h("p", { class: "hint" }, "Essays are sent to Hugging Face (Qwen3.5-9B). Token: huggingface.co/settings/tokens"));
 
-  const modeRadio = (online, text, sub) =>
+  const blocks = { offline: offlineBlock, local: localBlock, hf: hfBlock };
+  const modeRadio = (mode, text, sub) =>
     h("label", { class: "radio mode" },
       h("input", {
-        type: "radio", name: "mode", checked: s.online === online,
+        type: "radio", name: "mode", checked: s.mode === mode,
         onchange: () => {
-          s.online = online;
-          onlineBlock.classList.toggle("hidden", !online);
-          offlineBlock.classList.toggle("hidden", online);
+          s.mode = mode;
+          for (const m in blocks) blocks[m].classList.toggle("hidden", m !== mode);
         },
       }),
       h("span", {}, text), sub ? h("span", { class: "hint" }, " " + sub) : null);
 
   root.appendChild(h("section", { class: "card" },
     h("h2", {}, "Settings"),
-    h("div", {}, modeRadio(false, "On-device (offline)", "— private, slower")),
-    h("div", {}, modeRadio(true, "Online provider", "— faster, sends data out")),
+    h("div", {}, modeRadio("offline", "On-device", "— private, slower")),
+    h("div", {}, modeRadio("local", "Local network server", "— private, fast")),
+    h("div", {}, modeRadio("hf", "Hugging Face (cloud)", "— sends data out")),
     offlineBlock,
-    onlineBlock,
+    localBlock,
+    hfBlock,
     h("div", { class: "actions" },
       h("button", { onclick: renderCapture }, "← Back"),
       h("button", {

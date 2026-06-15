@@ -7,7 +7,6 @@ import com.aitutor.core.GradeSchema
 import com.aitutor.core.GradeValidation
 import com.aitutor.core.LangDetect
 import com.aitutor.core.OcrLine
-import com.aitutor.core.OnlineProvider
 import com.aitutor.core.Prompts
 import com.aitutor.core.TranscribeResponse
 import kotlinx.coroutines.Dispatchers
@@ -29,16 +28,25 @@ import java.net.HttpURLConnection
 import java.net.URL
 
 /**
- * Online inference via Hugging Face Inference Providers (OpenAI-compatible).
- * Mirrors the server's providers/client.py, in Kotlin, reusing the shared
- * `core` prompts / schema / validation. Runs natively (not from the WebView)
- * because a browser-origin fetch to these endpoints would be blocked by CORS.
+ * Inference against any OpenAI-compatible chat endpoint — used for both the
+ * Hugging Face router (cloud) and a Qwen server on the local network (Ollama /
+ * llama.cpp / LM Studio). Reuses the shared `core` prompts / schema / validation.
+ * Runs natively (not from the WebView) because a browser-origin fetch would be
+ * blocked by CORS.
+ *
+ * @param chatUrl    full OpenAI-style ".../chat/completions" URL
+ * @param apiKey     bearer token; sent only when non-blank (local needs none)
+ * @param requiresKey when true, fail fast if apiKey is blank
+ * @param structured "json_schema" | "json_object" | "none" (grade output)
  */
 class OnlineInference(
     private val context: Context,
-    private val provider: OnlineProvider,
-    private val apiKey: String,
+    private val chatUrl: String,
+    private val label: String,
     private val model: String,
+    private val apiKey: String,
+    private val requiresKey: Boolean,
+    private val structured: String,
     private val json: Json,
 ) : Inference {
 
@@ -94,7 +102,7 @@ class OnlineInference(
             addJsonObject { put("role", "system"); put("content", system) }
             addJsonObject { put("role", "user"); put("content", user) }
         }
-        val responseFormat = when (provider.structured) {
+        val responseFormat = when (structured) {
             "json_schema" -> buildJsonObject {
                 put("type", "json_schema")
                 putJsonObject("json_schema") {
@@ -115,17 +123,19 @@ class OnlineInference(
     override fun health(): String = buildJsonObject {
         put("ok", true)
         put("on_device", false)
-        put("provider", provider.id)
-        put("provider_label", provider.label)
+        put("provider_label", label)
         put("model", model)
-        put("key_present", apiKey.isNotBlank())
+        put("key_present", !requiresKey || apiKey.isNotBlank())
     }.toString()
 
     // --- HTTP ---
 
     private fun requireKey() {
-        if (apiKey.isBlank()) {
-            throw IllegalStateException("No API key for ${provider.label}. Add it in Settings.")
+        if (requiresKey && apiKey.isBlank()) {
+            throw IllegalStateException("No API key for $label. Add it in Settings.")
+        }
+        if (chatUrl.isBlank()) {
+            throw IllegalStateException("No server URL configured for $label. Set it in Settings.")
         }
     }
 
@@ -160,12 +170,12 @@ class OnlineInference(
                 if (responseFormat != null) put("response_format", responseFormat)
             }.toString()
 
-            val conn = (URL(provider.chatUrl()).openConnection() as HttpURLConnection).apply {
+            val conn = (URL(chatUrl).openConnection() as HttpURLConnection).apply {
                 requestMethod = "POST"
                 connectTimeout = 30_000
                 readTimeout = 180_000
                 doOutput = true
-                setRequestProperty("Authorization", "Bearer $apiKey")
+                if (apiKey.isNotBlank()) setRequestProperty("Authorization", "Bearer $apiKey")
                 setRequestProperty("Content-Type", "application/json")
             }
             conn.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
@@ -174,7 +184,7 @@ class OnlineInference(
             val stream = if (code in 200..299) conn.inputStream else conn.errorStream
             val text = stream?.bufferedReader()?.use { it.readText() } ?: ""
             if (code !in 200..299) {
-                throw IOException("${provider.label} HTTP $code: ${text.take(300)}")
+                throw IOException("$label HTTP $code: ${text.take(300)}")
             }
             json.parseToJsonElement(text).jsonObject["choices"]!!.jsonArray[0]
                 .jsonObject["message"]!!.jsonObject["content"]!!.jsonPrimitive.content.trim()

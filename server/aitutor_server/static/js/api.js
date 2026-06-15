@@ -81,6 +81,9 @@ export async function health() {
 export function hasSettings() { return !!bridge(); }
 export function getSettings() { return bridge() ? JSON.parse(bridge().getSettings()) : null; }
 export function saveSettings(patch) { if (bridge()) bridge().setSettings(JSON.stringify(patch)); }
+export function pingLocal(url) {
+  return bridge() ? nativeCall("pingServer", { url }) : Promise.reject(new Error("native only"));
+}
 
 /**
  * @param {File[]} questionFiles @param {File[]} essayFiles @param {string} language
