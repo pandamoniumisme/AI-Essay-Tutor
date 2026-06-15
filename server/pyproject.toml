@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "aitutor-server"
-version = "0.1.0"
-description = "Local AI server for the PSLE Essay Tutor LibreOffice extension"
+version = "0.2.0"
+description = "Local web server for the PSLE Essay Tutor (Gemini-backed inference)"
 requires-python = ">=3.11,<3.13"
 license = { text = "MIT" }
 
@@ -15,36 +15,18 @@ dependencies = [
     "python-multipart>=0.0.9",
     "pydantic>=2.6",
 
-    # OpenVINO runtime + GenAI (LLM pipeline + structured output).
-    # 2025.4.0+ is required by the official Qwen2.5-VL-7B IR we use as captioner.
-    "openvino>=2025.4",
-    "openvino-genai>=2025.4",
+    # Online inference (OCR + picture description + grading) goes to one of two
+    # OpenAI-compatible providers -- Gemini or Alibaba Cloud (Qwen) -- so a
+    # single OpenAI SDK serves both.
+    "openai>=1.40",
 
-    # IR conversion (Qwen3.5-9B, TrOCR) — pulls in transformers, accelerate.
-    # 1.27.0+ pairs with OpenVINO 2025.4 per the captioner model card.
-    "optimum[openvino]>=1.27",
-    "transformers>=4.45",
-
-    # Model fetching
-    "huggingface-hub>=0.24",
-
-    # Image preprocessing + OCR I/O
-    "opencv-python>=4.10",
+    # Server-side image validation / optional downscale of uploads.
     "pillow>=10.4",
-    "numpy>=1.26,<2.2",
-
-    # NOTE: paddleocr + paddlepaddle were originally pulled in for OCR but were
-    # retired on 2026-05-07 in favour of Qwen2.5-VL-7B handling OCR through the
-    # captioner pipeline. The OpenVINO VLM is more reliable on Lunar Lake and
-    # avoids paddle's PIR/oneDNN executor stalls. To revert: re-add
-    # "paddleocr>=3.0" and "paddlepaddle>=3.0" here and re-enable the
-    # _ensure_paddleocr body in models/manager.py.
 ]
 
 [project.optional-dependencies]
 dev = [
     "pytest>=8.2",
-    "pytest-asyncio>=0.23",
     "ruff>=0.6",
     "httpx>=0.27",  # For TestClient
 ]
@@ -53,14 +35,19 @@ dev = [
 where = ["."]
 include = ["aitutor_server*"]
 
+[tool.setuptools.package-data]
+aitutor_server = ["providers/prompts/*.md", "static/**/*"]
+
 [tool.ruff]
 line-length = 110
 target-version = "py311"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "UP"]
-ignore = ["E501"]  # Long lines OK; we already cap at 110
+ignore = [
+    "E501",  # Long lines OK; we already cap at 110
+    "B008",  # FastAPI dependency-injection idiom: File()/Form() in defaults
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-asyncio_mode = "auto"
