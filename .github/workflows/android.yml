@@ -2,7 +2,7 @@ name: Android
 
 on:
   push:
-    branches: ["android/on-device"]
+    branches: ["master", "android/on-device"]
     paths:
       - "android/**"
       - "server/aitutor_server/static/**"   # SPA is copied into the app
