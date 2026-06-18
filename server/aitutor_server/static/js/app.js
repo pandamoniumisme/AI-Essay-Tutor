@@ -191,7 +191,7 @@ function renderSettings() {
   clear(root);
   const s = api.getSettings() || {
     mode: "offline", hfToken: "", hfModel: "", localUrl: "",
-    localReadModel: "qwen3.5:9b", localGradeModel: "gemma4:26b", localUnloadReader: true,
+    localReadModel: "gemma4:26b", localGradeModel: "gemma4:26b", localUnloadReader: true,
     offlineModelName: "Qwen3.5-4B", ramGb: 0, minMemoryGb: 10.5,
   };
 
@@ -205,7 +205,7 @@ function renderSettings() {
 
   // --- local network server block ---
   const localUrlInput = h("input", { type: "text", class: "edit", placeholder: "http://192.168.1.50:11434/v1", value: s.localUrl || "" });
-  const readInput = h("input", { type: "text", class: "edit", placeholder: "qwen3.5:9b", value: s.localReadModel || "" });
+  const readInput = h("input", { type: "text", class: "edit", placeholder: "gemma4:26b", value: s.localReadModel || "" });
   const gradeInput = h("input", { type: "text", class: "edit", placeholder: "gemma4:26b", value: s.localGradeModel || "" });
   const unloadChk = h("input", { type: "checkbox", checked: s.localUnloadReader !== false });
   localUrlInput.addEventListener("input", () => { s.localUrl = localUrlInput.value; });

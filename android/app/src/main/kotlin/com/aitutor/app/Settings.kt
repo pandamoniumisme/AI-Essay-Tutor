@@ -11,7 +11,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import kotlin.math.roundToInt
 
-private const val DEFAULT_READ_MODEL = "qwen3.5:9b"
+private const val DEFAULT_READ_MODEL = "gemma4:26b"
 private const val DEFAULT_GRADE_MODEL = "gemma4:26b"
 
 /** User-chosen inference settings, persisted in SharedPreferences. */
