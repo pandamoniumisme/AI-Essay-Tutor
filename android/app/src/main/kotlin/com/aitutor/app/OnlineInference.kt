@@ -43,11 +43,15 @@ class OnlineInference(
     private val context: Context,
     private val chatUrl: String,
     private val label: String,
-    private val model: String,
+    private val transcribeModel: String,
+    private val gradeModel: String,
     private val apiKey: String,
     private val requiresKey: Boolean,
     private val structured: String,
     private val json: Json,
+    // When set (local Ollama), unload the transcribe model after OCR so only
+    // the (hot) grade model stays resident. Base is the server URL.
+    private val unloadBase: String? = null,
 ) : Inference {
 
     override suspend fun transcribe(payloadJson: String, onProgress: ProgressCb): String {
@@ -79,6 +83,13 @@ class OnlineInference(
             if (p.isNotEmpty()) questionParts.add(p)
         }
         val questionText = questionParts.joinToString("\n\n")
+
+        // Free the reading model (e.g. Qwen) so the hot grade model (e.g. Gemma)
+        // keeps the memory. Best-effort; only when reader != grader.
+        if (unloadBase != null && transcribeModel != gradeModel) {
+            onProgress("unloading reading model", 0.92)
+            LocalServer.unload(unloadBase, transcribeModel)
+        }
 
         onProgress("finalising", 0.95)
         val resp = TranscribeResponse(
@@ -114,7 +125,7 @@ class OnlineInference(
             else -> null  // "none": rely on prompt + lenient parse/validate
         }
 
-        val raw = chat(messages, responseFormat, maxTokens = 1800)
+        val raw = chat(gradeModel, messages, responseFormat, maxTokens = 1800)
         onProgress("validating output", 0.95)
         val response: GradeResponse = GradeValidation.parseAndValidate(raw, req)
         return json.encodeToString(GradeResponse.serializer(), response)
@@ -124,7 +135,7 @@ class OnlineInference(
         put("ok", true)
         put("on_device", false)
         put("provider_label", label)
-        put("model", model)
+        put("model", if (transcribeModel == gradeModel) gradeModel else "$transcribeModel → $gradeModel")
         put("key_present", !requiresKey || apiKey.isNotBlank())
     }.toString()
 
@@ -157,10 +168,10 @@ class OnlineInference(
                 }
             }
         }
-        return chat(messages, responseFormat = null, maxTokens = maxTokens)
+        return chat(transcribeModel, messages, responseFormat = null, maxTokens = maxTokens)
     }
 
-    private suspend fun chat(messages: JsonArray, responseFormat: JsonObject?, maxTokens: Int): String =
+    private suspend fun chat(model: String, messages: JsonArray, responseFormat: JsonObject?, maxTokens: Int): String =
         withContext(Dispatchers.IO) {
             val body = buildJsonObject {
                 put("model", model)

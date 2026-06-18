@@ -11,7 +11,8 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import kotlin.math.roundToInt
 
-private const val DEFAULT_LOCAL_MODEL = "qwen3.6:35b"
+private const val DEFAULT_READ_MODEL = "qwen3.5:9b"
+private const val DEFAULT_GRADE_MODEL = "gemma4:26b"
 
 /** User-chosen inference settings, persisted in SharedPreferences. */
 data class AppSettings(
@@ -19,10 +20,15 @@ data class AppSettings(
     val hfToken: String = "",
     val hfModel: String = OnlineProvider.HUGGINGFACE.defaultModel,
     val localUrl: String = "",              // e.g. http://192.168.1.50:11434/v1
-    val localModel: String = DEFAULT_LOCAL_MODEL,
+    // Local mode runs OCR on the reading model and grades on the grade model;
+    // the reading model is unloaded after OCR so the (hot) grade model keeps RAM.
+    val localReadModel: String = DEFAULT_READ_MODEL,
+    val localGradeModel: String = DEFAULT_GRADE_MODEL,
+    val localUnloadReader: Boolean = true,
 ) {
     fun hfModelResolved(): String = hfModel.ifBlank { OnlineProvider.HUGGINGFACE.defaultModel }
-    fun localModelResolved(): String = localModel.ifBlank { DEFAULT_LOCAL_MODEL }
+    fun localReadModelResolved(): String = localReadModel.ifBlank { DEFAULT_READ_MODEL }
+    fun localGradeModelResolved(): String = localGradeModel.ifBlank { DEFAULT_GRADE_MODEL }
 }
 
 object Settings {
@@ -40,7 +46,9 @@ object Settings {
             hfModel = p.getString("hfModel", OnlineProvider.HUGGINGFACE.defaultModel)
                 ?: OnlineProvider.HUGGINGFACE.defaultModel,
             localUrl = p.getString("localUrl", "") ?: "",
-            localModel = p.getString("localModel", DEFAULT_LOCAL_MODEL) ?: DEFAULT_LOCAL_MODEL,
+            localReadModel = p.getString("localReadModel", DEFAULT_READ_MODEL) ?: DEFAULT_READ_MODEL,
+            localGradeModel = p.getString("localGradeModel", DEFAULT_GRADE_MODEL) ?: DEFAULT_GRADE_MODEL,
+            localUnloadReader = p.getBoolean("localUnloadReader", true),
         )
     }
 
@@ -49,12 +57,15 @@ object Settings {
         val cur = load(context)
         val o = json.parseToJsonElement(payloadJson).jsonObject
         fun str(k: String, d: String) = o[k]?.jsonPrimitive?.content ?: d
+        fun bool(k: String, d: Boolean) = o[k]?.jsonPrimitive?.content?.toBooleanStrictOrNull() ?: d
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().apply {
             putString("mode", str("mode", cur.mode))
             putString("hfToken", str("hfToken", cur.hfToken))
             putString("hfModel", str("hfModel", cur.hfModel))
             putString("localUrl", str("localUrl", cur.localUrl))
-            putString("localModel", str("localModel", cur.localModel))
+            putString("localReadModel", str("localReadModel", cur.localReadModel))
+            putString("localGradeModel", str("localGradeModel", cur.localGradeModel))
+            putBoolean("localUnloadReader", bool("localUnloadReader", cur.localUnloadReader))
             apply()
         }
     }
@@ -70,7 +81,9 @@ object Settings {
             put("hfToken", s.hfToken)
             put("hfModel", s.hfModel)
             put("localUrl", s.localUrl)
-            put("localModel", s.localModel)
+            put("localReadModel", s.localReadModel)
+            put("localGradeModel", s.localGradeModel)
+            put("localUnloadReader", s.localUnloadReader)
             put("offlineModelName", ModelChoice.QWEN_4B.displayName)
             put("ramGb", ramGb)
             put("minMemoryGb", minMemoryGb)

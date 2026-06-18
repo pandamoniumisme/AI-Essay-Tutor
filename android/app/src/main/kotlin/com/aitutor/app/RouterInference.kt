@@ -21,7 +21,8 @@ class RouterInference(private val context: Context, private val json: Json) : In
             context,
             chatUrl = OnlineProvider.HUGGINGFACE.chatUrl(),
             label = OnlineProvider.HUGGINGFACE.label,
-            model = s.hfModelResolved(),
+            transcribeModel = s.hfModelResolved(),
+            gradeModel = s.hfModelResolved(),
             apiKey = s.hfToken,
             requiresKey = true,
             structured = OnlineProvider.HUGGINGFACE.structured,
@@ -31,11 +32,13 @@ class RouterInference(private val context: Context, private val json: Json) : In
             context,
             chatUrl = LocalServer.chatUrl(s.localUrl),
             label = "Local server",
-            model = s.localModelResolved(),
+            transcribeModel = s.localReadModelResolved(),
+            gradeModel = s.localGradeModelResolved(),
             apiKey = "",
             requiresKey = false,
             structured = "none",
             json = json,
+            unloadBase = if (s.localUnloadReader) s.localUrl else null,
         )
         else -> offline
     }
@@ -56,7 +59,9 @@ class RouterInference(private val context: Context, private val json: Json) : In
             }.toString()
             "local" -> buildJsonObject {
                 put("ok", true); put("on_device", false)
-                put("provider_label", "Local server"); put("model", s.localModelResolved())
+                put("provider_label", "Local server")
+                val r = s.localReadModelResolved(); val g = s.localGradeModelResolved()
+                put("model", if (r == g) g else "$r → $g")
                 put("key_present", s.localUrl.isNotBlank())  // URL set; reachability is the Test button
             }.toString()
             else -> offline.health()

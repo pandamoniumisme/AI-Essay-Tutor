@@ -190,7 +190,8 @@ function renderSettings() {
   const root = app();
   clear(root);
   const s = api.getSettings() || {
-    mode: "offline", hfToken: "", hfModel: "", localUrl: "", localModel: "qwen3.6:35b",
+    mode: "offline", hfToken: "", hfModel: "", localUrl: "",
+    localReadModel: "qwen3.5:9b", localGradeModel: "gemma4:26b", localUnloadReader: true,
     offlineModelName: "Qwen3.5-4B", ramGb: 0, minMemoryGb: 10.5,
   };
 
@@ -204,9 +205,13 @@ function renderSettings() {
 
   // --- local network server block ---
   const localUrlInput = h("input", { type: "text", class: "edit", placeholder: "http://192.168.1.50:11434/v1", value: s.localUrl || "" });
-  const localModelInput = h("input", { type: "text", class: "edit", placeholder: "qwen3.6:35b", value: s.localModel || "" });
+  const readInput = h("input", { type: "text", class: "edit", placeholder: "qwen3.5:9b", value: s.localReadModel || "" });
+  const gradeInput = h("input", { type: "text", class: "edit", placeholder: "gemma4:26b", value: s.localGradeModel || "" });
+  const unloadChk = h("input", { type: "checkbox", checked: s.localUnloadReader !== false });
   localUrlInput.addEventListener("input", () => { s.localUrl = localUrlInput.value; });
-  localModelInput.addEventListener("input", () => { s.localModel = localModelInput.value; });
+  readInput.addEventListener("input", () => { s.localReadModel = readInput.value; });
+  gradeInput.addEventListener("input", () => { s.localGradeModel = gradeInput.value; });
+  unloadChk.addEventListener("change", () => { s.localUnloadReader = unloadChk.checked; });
   const localStatus = h("p", { class: "hint" }, "");
   const testBtn = h("button", {
     onclick: async () => {
@@ -223,11 +228,14 @@ function renderSettings() {
   const localBlock = h("div", { class: "online-block" + (s.mode === "local" ? "" : " hidden") },
     h("label", {}, "Server URL"),
     localUrlInput,
-    h("label", {}, "Model"),
-    localModelInput,
+    h("label", {}, "Reading model (OCR)"),
+    readInput,
+    h("label", {}, "Grading model"),
+    gradeInput,
+    h("label", { class: "radio" }, unloadChk, h("span", {}, " Unload the reading model after OCR (frees memory)")),
     h("div", { class: "actions" }, testBtn),
     localStatus,
-    h("p", { class: "hint" }, "Your Qwen server (Ollama / llama.cpp) on the same Wi-Fi. Essays stay on your network."));
+    h("p", { class: "hint" }, "Your Ollama / llama.cpp server on the same Wi-Fi. Essays stay on your network."));
 
   // --- Hugging Face block ---
   const keyInput = h("input", { type: "password", class: "edit", placeholder: "hf_…", value: s.hfToken || "" });

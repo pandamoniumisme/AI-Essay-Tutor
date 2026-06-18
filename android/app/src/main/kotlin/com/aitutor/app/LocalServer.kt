@@ -29,6 +29,33 @@ object LocalServer {
     private fun modelsUrl(base: String): String =
         chatUrl(base).removeSuffix("/chat/completions") + "/models"
 
+    /** Ollama native API base (strip a trailing /v1) for the unload call. */
+    private fun nativeBase(base: String): String {
+        val b = base.trim().trimEnd('/')
+        return if (b.endsWith("/v1")) b.removeSuffix("/v1") else b
+    }
+
+    /** Best-effort unload of an Ollama model (keep_alive=0) so it frees memory.
+     *  Silent no-op if the server isn't Ollama or is unreachable. */
+    suspend fun unload(base: String, model: String) = withContext(Dispatchers.IO) {
+        if (base.isBlank() || model.isBlank()) return@withContext
+        try {
+            val conn = (URL("${nativeBase(base)}/api/generate").openConnection() as HttpURLConnection).apply {
+                requestMethod = "POST"
+                connectTimeout = 3_000
+                readTimeout = 5_000
+                doOutput = true
+                setRequestProperty("Content-Type", "application/json")
+            }
+            val body = buildJsonObject { put("model", model); put("keep_alive", 0) }.toString()
+            conn.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
+            conn.responseCode  // trigger the request
+            conn.disconnect()
+        } catch (_: Exception) {
+            // ignore — unloading is an optimisation, not required
+        }
+    }
+
     /** Quick reachability check (GET /models, 4s). Returns JSON {ok, detail}. */
     suspend fun probe(base: String): String = withContext(Dispatchers.IO) {
         if (base.isBlank()) return@withContext result(false, "Enter a server URL first.")
