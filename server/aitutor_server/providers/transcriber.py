@@ -30,7 +30,7 @@ def _noop(_msg: str, _progress: float) -> None:
     pass
 
 
-# --- Prompts (ported verbatim from the OpenVINO captioner) ---------------
+# --- Prompts (OCR + picture-description for the HF vision model) ---------
 
 _QUESTION_PROMPT_EN = """\
 You are looking at a PSLE Primary 6 English Continuous Writing question prompt.

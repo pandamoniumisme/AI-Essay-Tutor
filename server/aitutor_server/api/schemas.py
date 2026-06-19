@@ -1,8 +1,12 @@
 """Pydantic v2 contracts for the AI server.
 
 Single source of truth for both the FastAPI request/response shapes and the
-JSON schema we hand to OpenVINO GenAI's ``StructuredOutputConfig`` for the
-LLM grader. Keep these in sync with the plan and ``llm/schema.py``.
+JSON schema that documents the grader's per-route score caps. Inference goes to
+the Hugging Face Inference Providers router over its OpenAI-compatible API; the
+grader's ``structured`` mode is ``"none"`` (see ``providers/config.py``), so that
+schema is NOT sent on the wire as a ``response_format`` -- it documents/derives
+the caps while a lenient parser carries JSON correctness. Keep these in sync with
+the plan and ``providers/grader.py``.
 """
 from __future__ import annotations
 
