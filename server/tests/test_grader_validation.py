@@ -1,7 +1,7 @@
 """Unit tests for the model-independent grader validation logic.
 
-No network / no Gemini -- these exercise the JSON parsing, span filtering, and
-score clamping that run on whatever the model returns.
+No network / no model call -- these exercise the JSON parsing, span filtering,
+and score clamping that run on whatever the model returns.
 """
 from __future__ import annotations
 

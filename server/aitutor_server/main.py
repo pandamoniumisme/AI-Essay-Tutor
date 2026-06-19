@@ -1,9 +1,10 @@
 """FastAPI entry point for the local web app.
 
 Serves the browser SPA (static bundle) and the JSON API. Inference is
-delegated to Gemini, so there is no model download, no NPU, and no port-file
-handshake with a LibreOffice extension anymore -- just a fixed local port the
-launcher opens in the browser.
+delegated to the online provider (Hugging Face Inference Providers, via the
+OpenAI-compatible router), so there is no model download, no NPU, and no
+port-file handshake with a LibreOffice extension anymore -- just a fixed local
+port the launcher opens in the browser.
 """
 from __future__ import annotations
 

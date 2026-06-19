@@ -1,10 +1,11 @@
 """LLM grader.
 
-Generation is delegated to the active online provider (Gemini or Qwen via the
-OpenAI-compatible backend) with a JSON-constrained response; the *validation*
-half (lenient parse, drop hallucinated/no-op spans, clamp scores, compute the
-v1-corrected essay for improvement-edit validation) is model-independent and
-still earns its keep -- any model can propose a span that isn't in the essay.
+Generation is delegated to the active online provider (Hugging Face / Qwen3.5-9B
+via the OpenAI-compatible backend) and asked for a JSON response; the
+*validation* half (lenient parse, drop hallucinated/no-op spans, clamp scores,
+compute the v1-corrected essay for improvement-edit validation) is
+model-independent and still earns its keep -- any model can propose a span that
+isn't in the essay.
 
 The grader prompts (with the Singapore-vocabulary allowlists) live in
 ``providers/prompts/grader_{en,zh}.md`` and are passed as the system message.
@@ -73,13 +74,17 @@ def _user_prompt(req: GradeRequest) -> str:
     )
 
 
-# --- JSON schema (Gemini responseSchema subset) --------------------------
+# --- JSON schema (per-route score caps) ----------------------------------
 
 def _grade_response_json_schema(req: GradeRequest) -> dict:
-    """Build the schema handed to Gemini's ``response_schema``. Gemini accepts
-    a constrained OpenAPI subset, so we omit ``additionalProperties``/``const``/
-    ``default`` (unsupported) and pin ``max_total`` via minimum==maximum. The
-    per-paper sub-mark caps are still expressed with minimum/maximum."""
+    """Build the grade-output JSON schema. With the active provider's
+    ``structured`` mode == "none" (see config.py / client.py) this schema is NOT
+    sent on the wire as a ``response_format``; its real job is documenting and
+    deriving the per-route score caps -- ``max_total`` is pinned via
+    minimum==maximum and the per-paper sub-mark caps via minimum/maximum. It is
+    kept OpenAI/json_schema-shaped (no ``additionalProperties``/``const``/
+    ``default``) so it can be enforced as-is if a provider's ``structured`` mode
+    is ever switched on."""
     if req.language == "zh-Hans":
         content_max, language_max, total_max = 20, 20, 40
     elif req.paper_type == "situational":
@@ -151,9 +156,10 @@ def _generate_structured(system: str, user: str, schema: dict) -> str:
 # --- Output validation (ported verbatim from llm/grader.py) --------------
 
 def _parse_json_lenient(raw: str) -> dict:
-    """Try increasingly forgiving repairs before giving up. With Gemini's
-    structured output this is almost always a no-op, but it's cheap insurance
-    against the occasional code-fence / trailing-prose / truncation."""
+    """Try increasingly forgiving repairs before giving up. Because the provider
+    isn't asked to enforce a ``response_format`` (``structured`` == "none"), this
+    is the load-bearing path: it's cheap insurance against the occasional
+    code-fence / trailing-prose / truncation around the JSON."""
     candidates: list[str] = [raw]
 
     fenced = raw.strip()

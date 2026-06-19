@@ -3,7 +3,7 @@
 Small-config only -- the web build no longer downloads multi-GB model IRs, so
 the old ``%LOCALAPPDATA%\\AIEssayTutor\\models`` tree is gone. We keep a roaming
 config dir for the log file and the optional ``config.json`` that can hold the
-Gemini API key.
+Hugging Face API key (``hf_token``).
 """
 from __future__ import annotations
 
