@@ -1,0 +1,39 @@
+name: server-tests
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  python-tests:
+    name: Offline server tests (Python)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install server package + test deps
+        run: python -m pip install --upgrade pip './server[dev]'
+
+      - name: Run offline grader tests
+        working-directory: server
+        run: python -m pytest tests/test_grader_validation.py -q
+
+  js-tests:
+    name: SPA span-anchoring tests (Node)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Run SPA span-anchoring test
+        run: node --test server/tests/js/annotate.test.mjs
