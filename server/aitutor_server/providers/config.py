@@ -1,39 +1,29 @@
-"""Online provider configuration.
+"""Inference backend configuration.
 
-A single online backend: **Hugging Face Inference Providers**, reached over its
-OpenAI-compatible router. Default model is Qwen3.5-9B.
+A single backend: the **local Ollama server** on the AI box, reached over its
+OpenAI-compatible ``/v1`` API. Default model is ``gemma4:26b`` (multimodal: it
+does both the OCR/picture-description and the rubric grading). Nothing leaves
+the machine — that is the whole point of this build.
 
-Key from ``HF_TOKEN`` (or ``HUGGINGFACE_API_KEY``), falling back to
-``hf_token`` in config.json. Model overridable via ``AITUTOR_HF_MODEL`` (e.g.
-append ``:cheapest`` or a ``:provider`` suffix to pick routing).
+Config (all optional; the defaults assume the app runs on the same box as
+Ollama):
+
+- ``AITUTOR_OLLAMA_URL`` / ``OLLAMA_BASE_URL`` — OpenAI-compatible base URL
+  (default ``http://127.0.0.1:11434/v1``).
+- ``AITUTOR_MODEL`` — model tag (default ``gemma4:26b``).
+
+Ollama needs no API key; the OpenAI SDK still wants a non-empty string, so we
+pass a placeholder.
 """
 from __future__ import annotations
 
-import json
 import os
+import urllib.request
 from pathlib import Path
 
-from aitutor_server.paths import CONFIG_FILE
-
-
-class MissingApiKey(RuntimeError):
-    """Raised when the active provider has no API key configured."""
-
-
-# ``structured`` = how JSON grade output is constrained. HF routes to many
-# providers with mixed response_format support, so we force nothing ("none")
-# and rely on the prompt + lenient parse/validate.
-PROVIDERS: dict[str, dict] = {
-    "huggingface": {
-        "label": "Hugging Face",
-        "base_url": "https://router.huggingface.co/v1",
-        "key_env": ("HF_TOKEN", "HUGGINGFACE_API_KEY"),
-        "config_key": "hf_token",
-        "default_model": "Qwen/Qwen3.5-9B",
-        "model_env": "AITUTOR_HF_MODEL",
-        "structured": "none",
-    },
-}
+DEFAULT_BASE_URL = "http://127.0.0.1:11434/v1"
+DEFAULT_MODEL = "gemma4:26b"
+PLACEHOLDER_KEY = "ollama"  # Ollama ignores it; the OpenAI SDK requires non-empty.
 
 
 def _load_dotenv_once() -> None:
@@ -57,45 +47,36 @@ def _load_dotenv_once() -> None:
         pass
 
 
-def active_name() -> str:
-    return "huggingface"
-
-
-def settings() -> dict:
-    return PROVIDERS[active_name()]
+def base_url() -> str:
+    _load_dotenv_once()
+    return (os.environ.get("AITUTOR_OLLAMA_URL")
+            or os.environ.get("OLLAMA_BASE_URL")
+            or DEFAULT_BASE_URL).rstrip("/")
 
 
 def model() -> str:
     _load_dotenv_once()
-    s = settings()
-    return os.environ.get(s["model_env"], s["default_model"])
+    return os.environ.get("AITUTOR_MODEL", DEFAULT_MODEL)
 
 
-def api_key() -> str | None:
-    _load_dotenv_once()
-    s = settings()
-    for env in s["key_env"]:
-        v = os.environ.get(env)
-        if v and v.strip():
-            return v.strip()
+def api_key() -> str:
+    return PLACEHOLDER_KEY
+
+
+def reachable() -> bool:
+    """Quick liveness probe against the OpenAI-compatible ``/models`` endpoint."""
     try:
-        cfg = json.loads(CONFIG_FILE.read_text(encoding="utf-8"))
-        v = cfg.get(s["config_key"])
-        return v.strip() if isinstance(v, str) and v.strip() else None
-    except (OSError, json.JSONDecodeError):
-        return None
-
-
-def key_present() -> bool:
-    return api_key() is not None
+        with urllib.request.urlopen(f"{base_url()}/models", timeout=2) as resp:
+            return 200 <= resp.status < 500
+    except Exception:
+        return False
 
 
 def health() -> dict:
-    s = settings()
     return {
         "ok": True,
-        "provider": active_name(),
-        "provider_label": s["label"],
+        "backend": "ollama",
+        "base_url": base_url(),
         "model": model(),
-        "key_present": key_present(),
+        "reachable": reachable(),
     }

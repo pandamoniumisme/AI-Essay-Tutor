@@ -1,8 +1,8 @@
-"""OpenAI-compatible backend for the online provider (Hugging Face / Qwen3.5-9B).
+"""OpenAI-compatible client for the local Ollama backend (gemma4:26b).
 
-Vision goes through an inline base64 ``image_url`` part; grading optionally uses
-``response_format`` per the provider's ``structured`` mode (currently "none" for
-HF — we rely on the prompt + lenient parse/validate). Base URL, key, and model
+Vision goes through an inline base64 ``image_url`` part; grading asks for a JSON
+object via ``response_format`` (Ollama honours ``{"type": "json_object"}``) and
+the grader still runs its lenient parse/validate afterwards. Base URL and model
 come from config.py.
 """
 from __future__ import annotations
@@ -17,25 +17,20 @@ log = logging.getLogger(__name__)
 
 Image = tuple[bytes, str]  # (raw bytes, mime_type)
 
+# Local CPU inference of a 26B model can take a while; don't time out mid-grade.
+_TIMEOUT_S = 600
+
 
 @lru_cache(maxsize=4)
-def _client(name: str, base_url: str, key: str):
+def _client(base_url: str, key: str):
     from openai import OpenAI
 
-    log.info("creating OpenAI-compatible client for provider=%s", name)
-    return OpenAI(api_key=key, base_url=base_url)
+    log.info("creating OpenAI-compatible client for base_url=%s", base_url)
+    return OpenAI(api_key=key, base_url=base_url, timeout=_TIMEOUT_S)
 
 
 def _get_client():
-    key = config.api_key()
-    if not key:
-        s = config.settings()
-        raise config.MissingApiKey(
-            f"No API key for provider '{config.active_name()}'. Set "
-            f"{'/'.join(s['key_env'])} (or the matching key in config.json)."
-        )
-    s = config.settings()
-    return _client(config.active_name(), s["base_url"], key)
+    return _client(config.base_url(), config.api_key())
 
 
 def generate_vision(prompt: str, image: Image, max_tokens: int = 1500) -> str:
@@ -59,20 +54,11 @@ def generate_vision(prompt: str, image: Image, max_tokens: int = 1500) -> str:
 
 def generate_text(system: str, user: str, json_schema: dict | None = None,
                   max_tokens: int = 1800) -> str:
-    """Text-only call. When ``json_schema`` is given, constrain output to JSON
-    using whichever mechanism the active endpoint supports."""
+    """Text-only call. When ``json_schema`` is given, ask the backend for a JSON
+    object (the grader's lenient parser is still the safety net)."""
     kwargs: dict = {}
     if json_schema is not None:
-        mode = config.settings()["structured"]
-        if mode == "json_schema":
-            kwargs["response_format"] = {
-                "type": "json_schema",
-                "json_schema": {"name": "grade_response", "schema": json_schema},
-            }
-        elif mode == "json_object":
-            kwargs["response_format"] = {"type": "json_object"}
-        # mode == "none": don't force a response_format; the prompt + lenient
-        # parse/validate handle JSON extraction (broadest provider support).
+        kwargs["response_format"] = {"type": "json_object"}
 
     resp = _get_client().chat.completions.create(
         model=config.model(),

@@ -1,24 +1,26 @@
-# PSLE Compo Tutor — Web App
+# AI Essay Tutor — Web App / PWA
 
-A small local web app that grades PSLE English and Simplified-Chinese
-composition essays. Photograph the question and the handwritten essay; it
-transcribes the essay, lets you fix any OCR slips, then scores it against the
-PSLE rubric and shows redline corrections, comments, and an improved version —
-all in the browser.
+An installable PWA that grades PSLE English and Simplified-Chinese composition
+essays. Photograph the question and the handwritten essay; it transcribes the
+essay, lets you fix any OCR slips, then scores it against the PSLE rubric and
+shows redline corrections, comments, and an improved version — all in the
+browser.
 
-Online inference goes to **Hugging Face Inference Providers** (OpenAI-compatible
-router) running **Qwen3.5-9B** — so there's no model download and no special
-hardware. A single FastAPI process serves the page and the API on
-`http://127.0.0.1:8765`.
+Inference runs on a **local Ollama server (`gemma4:26b`)** — there is no cloud
+provider and no API key. A single FastAPI process serves the page and the API on
+`http://127.0.0.1:8765`; in production it sits behind `tailscale serve` for HTTPS
+on the tailnet. Sessions are persisted server-side and graded by a background
+job, so you can shoot the pages on a phone and pick up the marked result on a
+desktop.
 
-> ⚠️ Essay images and text are sent to Hugging Face for processing. These are
-> children's essays — make sure that's acceptable for your use.
+> Essay images and text are processed entirely on your own AI server and never
+> leave your network.
 
 ## Setup (macOS / Linux)
 
 ```bash
 ./setup.sh                      # create .venv, install deps, scaffold .env
-# edit .env: paste your HF_TOKEN
+# edit .env only if Ollama isn't on this box (AITUTOR_OLLAMA_URL=...)
 ./run.sh                        # opens http://127.0.0.1:8765
 ```
 
@@ -26,44 +28,46 @@ hardware. A single FastAPI process serves the page and the API on
 
 ```powershell
 .\scripts\bootstrap_server.ps1          # create venv + install deps
-$env:HF_TOKEN = "hf_your-token-here"
 .\scripts\run_server_dev.ps1            # opens http://127.0.0.1:8765
 ```
 
 ## Configuration
 
-The server reads a `.env` file in the repo root automatically. You can also set
-these as environment variables, or put the matching `*_api_key` in `config.json`
-under the app config dir (`%APPDATA%\AIEssayTutor` on Windows,
-`~/.config/AIEssayTutor` elsewhere).
+The server reads a `.env` file in the repo root automatically (see
+`.env.example`). All settings are optional; the defaults assume Ollama runs on
+the same box.
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `HF_TOKEN` | — | Hugging Face token ([get one](https://huggingface.co/settings/tokens)) |
-| `AITUTOR_HF_MODEL` | `Qwen/Qwen3.5-9B` | model id (append `:cheapest` or `:provider` to route) |
+| `AITUTOR_OLLAMA_URL` | `http://127.0.0.1:11434/v1` | OpenAI-compatible Ollama base URL |
+| `AITUTOR_MODEL` | `gemma4:26b` | model tag |
+| `AITUTOR_DATA_DIR` | `~/.local/share/AIEssayTutor` | sessions DB + uploaded images |
 
 The one model handles OCR + picture description **and** grading, for both
 English and Chinese (only the prompt + rubric caps switch by language).
-`GET /api/health` reports the model and whether a token is set.
+`GET /api/health` reports the model and whether Ollama is reachable.
 
 ## How it works
 
 ```
-Browser SPA ──fetch──▶ FastAPI (local) ──HTTPS──▶ Hugging Face (Qwen3.5-9B)
-  capture →            /api/transcribe   transcription (OCR + picture caption)
-  review →             /api/grade        rubric grade (JSON via prompt + validate)
-  marked essay         /api/health
+PWA ──fetch──▶ FastAPI (local) ──/v1──▶ Ollama (gemma4:26b)
+  capture →    POST /api/sessions          create + enqueue transcription
+  review →     GET  /api/sessions[/{id}]   list / poll status
+  marked essay POST /api/sessions/{id}/grade
 ```
 
-- `aitutor_server/providers/` — provider config + a shared OpenAI-compatible
-  client, plus the transcriber and grader (prompts + JSON validation).
-- `aitutor_server/api/` — the `/api/*` endpoints + Pydantic contracts.
-- `aitutor_server/static/` — the no-build vanilla-JS front-end. The redline /
-  comment placement lives in `static/js/annotate.js`.
+- `aitutor_server/providers/` — the Ollama client config + a shared
+  OpenAI-compatible client, plus the transcriber and grader (prompts + JSON
+  validation).
+- `aitutor_server/sessions.py` — persisted sessions (SQLite + image folders) and
+  the serial background job runner.
+- `aitutor_server/api/sessions.py` — the `/api/sessions/*` endpoints.
+- `aitutor_server/static/` — the no-build vanilla-JS PWA. The redline / comment
+  placement lives in `static/js/annotate.js`.
 
 ## Tests
 
 ```bash
-cd server && ../.venv/bin/python -m pytest   # server + grader validation
+cd server && ../.venv/bin/python -m pytest   # grader validation (offline)
 node --test tests/js/annotate.test.mjs       # front-end annotation engine
 ```

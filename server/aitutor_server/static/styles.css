@@ -277,6 +277,39 @@ table.scores td { background: rgba(255, 255, 255, 0.6); }
 
 .hidden { display: none; }
 
+/* --- session list (home) --- */
+.session-list { display: flex; flex-direction: column; gap: 0.5rem; }
+.session-row {
+  display: flex; align-items: center; gap: 0.7rem;
+  padding: 0.6rem 0.8rem;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.7);
+  cursor: pointer;
+}
+.session-row:hover { box-shadow: 0 6px 16px -8px rgba(31, 84, 196, 0.45); }
+.session-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.session-meta { font-size: 0.78rem; color: var(--muted); white-space: nowrap; }
+.rm-row {
+  border: none; background: transparent; color: var(--muted);
+  font-size: 1.2rem; line-height: 1; padding: 0 0.2rem; cursor: pointer;
+}
+.rm-row:hover { color: var(--del); box-shadow: none; }
+
+.badge {
+  font-size: 0.7rem; font-weight: 700; padding: 0.18rem 0.55rem;
+  border-radius: 999px; white-space: nowrap;
+  background: rgba(120, 160, 205, 0.22); color: var(--muted);
+}
+.badge.work { background: rgba(59, 130, 246, 0.18); color: var(--accent-deep); }
+.badge.ready { background: rgba(180, 115, 26, 0.16); color: var(--cmt); }
+.badge.done { background: rgba(15, 138, 107, 0.16); color: var(--ins); }
+.badge.err { background: rgba(255, 226, 226, 0.92); color: #9b1c1c; }
+
+/* --- waiting card --- */
+.card.waiting { text-align: center; }
+.card.waiting .spinner { margin: 0.5rem auto 1rem; }
+
 @media print {
   header, .actions, .overlay { display: none !important; }
   body { background: #fff; }

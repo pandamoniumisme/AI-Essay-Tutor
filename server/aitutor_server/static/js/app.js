@@ -1,5 +1,9 @@
-// App controller: capture -> transcription review -> annotated results.
-// No framework -- each screen re-renders into #app and wires its own handlers.
+// App controller: home (recent sessions) -> capture -> review -> marked.
+// No framework. Work is persisted server-side, so a session created on a phone
+// shows up in the recent list on a desktop; opening it polls until it's marked.
+//
+// Top-level navigation is hash-routed (#new, #s/<id>) so a session link can be
+// opened on another device. Within a session, screens are rendered directly.
 
 import * as api from "./api.js";
 import { renderAnnotated, renderCommentList } from "./render.js";
@@ -7,18 +11,30 @@ import { applyEdits } from "./annotate.js";
 import { scoreRows } from "./scores.js";
 
 const MAX_EDGE = 2000; // client-side downscale ceiling (handwriting stays legible)
+const POLL_MS = 2500;
 
 const state = {
   language: "zh-Hans",
   paperType: "continuous",
   questionFiles: [],
   essayFiles: [],
-  transcript: null, // {language, question_text, essay_text}
-  grade: null,
 };
+
+// Bumped on every screen render; in-flight poll loops stop when it changes.
+let nav = 0;
 
 const app = () => document.getElementById("app");
 const overlay = () => document.getElementById("overlay");
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+const STATUS = {
+  created: { label: "Queued", cls: "badge" },
+  transcribing: { label: "Transcribing…", cls: "badge work" },
+  transcribed: { label: "Ready to grade", cls: "badge ready" },
+  grading: { label: "Grading…", cls: "badge work" },
+  graded: { label: "Marked", cls: "badge done" },
+  error: { label: "Error", cls: "badge err" },
+};
 
 // --- tiny DOM helper -----------------------------------------------------
 
@@ -45,6 +61,20 @@ function showOverlay(msg) {
 }
 function hideOverlay() { overlay().classList.add("hidden"); }
 
+function ago(epoch) {
+  const s = Math.max(0, Date.now() / 1000 - epoch);
+  if (s < 60) return "just now";
+  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
+  if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
+  return `${Math.floor(s / 86400)}d ago`;
+}
+
+const langLabel = (l) => (l === "en" ? "English" : "中文");
+
+function goHome() { location.hash = ""; }
+function goNew() { location.hash = "#new"; }
+function goSession(id) { location.hash = `#s/${id}`; }
+
 // --- image downscale -----------------------------------------------------
 
 async function downscale(file) {
@@ -69,16 +99,12 @@ async function refreshHealth() {
   const el = document.getElementById("health");
   try {
     const hh = await api.health();
-    if (hh.on_device) {
-      // Keep the header minimal — RAM + model recommendation live in Settings.
+    if (hh.reachable) {
       el.className = "health ok";
-      el.textContent = "On-device";
-    } else if (hh.key_present) {
-      el.className = "health ok";
-      el.textContent = `${hh.provider_label || hh.provider} · ${hh.model}`;
+      el.textContent = `On your AI server · ${hh.model}`;
     } else {
       el.className = "health warn";
-      el.textContent = `${hh.provider_label || hh.provider || "Provider"} not configured — open Settings.`;
+      el.textContent = "AI server (Ollama) unreachable.";
     }
   } catch {
     el.className = "health warn";
@@ -86,7 +112,66 @@ async function refreshHealth() {
   }
 }
 
-// --- screen 1: capture ---------------------------------------------------
+// --- screen: home (recent sessions) --------------------------------------
+
+async function renderHome() {
+  const myNav = ++nav;
+  const root = app();
+  clear(root);
+
+  root.appendChild(h("section", { class: "card" },
+    h("h2", {}, "AI Essay Tutor"),
+    h("p", { class: "privacy" }, "Everything stays on your AI server — nothing leaves your private network."),
+    h("div", { class: "actions" },
+      h("button", { class: "primary", onclick: goNew }, "＋ New essay"))));
+
+  const listCard = h("section", { class: "card" }, h("h2", {}, "Recent"));
+  const listBox = h("div", { class: "session-list" }, h("p", { class: "hint" }, "Loading…"));
+  listCard.appendChild(listBox);
+  root.appendChild(listCard);
+
+  // Poll the list so a session shot on the phone appears here on the desktop.
+  while (myNav === nav) {
+    let sessions;
+    try {
+      sessions = await api.listSessions();
+    } catch {
+      if (myNav === nav) { clear(listBox); listBox.appendChild(h("p", { class: "hint" }, "Server unreachable.")); }
+      await sleep(POLL_MS);
+      continue;
+    }
+    if (myNav !== nav) return;
+    drawSessionList(listBox, sessions);
+    await sleep(POLL_MS * 1.5);
+  }
+}
+
+function drawSessionList(box, sessions) {
+  clear(box);
+  if (!sessions.length) {
+    box.appendChild(h("p", { class: "hint" }, "No essays yet. Tap “New essay” to start."));
+    return;
+  }
+  for (const s of sessions) {
+    const meta = STATUS[s.status] || STATUS.created;
+    const del = h("button", {
+      class: "rm-row", title: "delete",
+      onclick: async (e) => {
+        e.stopPropagation();
+        if (!confirm("Delete this session?")) return;
+        try { await api.deleteSession(s.id); row.remove(); } catch (err) { alert(err.message); }
+      },
+    }, "×");
+    const row = h("div", { class: "session-row", onclick: () => goSession(s.id) },
+      h("span", { class: meta.cls }, meta.label),
+      h("span", { class: "session-title" }, s.title || "(untitled)"),
+      h("span", { class: "session-meta" }, `${langLabel(s.language)} · ${ago(s.updated_at)}`),
+      del);
+    box.appendChild(row);
+  }
+}
+
+// --- screen: capture -----------------------------------------------------
 
 function fileSlot(label, kind) {
   const list = h("div", { class: "thumbs" });
@@ -113,8 +198,6 @@ function fileSlot(label, kind) {
     drawThumbs();
   };
 
-  // A button that wraps a hidden file input. `camera` sets capture so the
-  // WebView opens the camera; otherwise it's the gallery/file picker.
   const pickButton = (text, camera) => {
     const attrs = { type: "file", accept: "image/*", class: "file-input",
       onchange: (e) => { addFiles(e.target.files); e.target.value = ""; } };
@@ -131,14 +214,15 @@ function fileSlot(label, kind) {
 }
 
 function renderCapture() {
+  ++nav;
+  state.questionFiles = [];
+  state.essayFiles = [];
   const root = app();
   clear(root);
 
   const enOnly = h("div", { class: "paper-row" + (state.language === "en" ? "" : " hidden") },
     h("label", {}, "Paper type:"),
-    h("select", {
-      onchange: (e) => { state.paperType = e.target.value; },
-    },
+    h("select", { onchange: (e) => { state.paperType = e.target.value; } },
       h("option", { value: "continuous", selected: state.paperType === "continuous" }, "Continuous (36)"),
       h("option", { value: "situational", selected: state.paperType === "situational" }, "Situational (14)")));
 
@@ -146,34 +230,12 @@ function renderCapture() {
     h("label", { class: "radio" },
       h("input", {
         type: "radio", name: "lang", value: val, checked: state.language === val,
-        onchange: () => {
-          state.language = val;
-          enOnly.classList.toggle("hidden", val !== "en");
-        },
-      }),
-      text);
-
-  const settings = api.getSettings();   // null on the web build
-  let privacy;
-  if (settings && settings.mode === "offline") {
-    privacy = "Everything stays on your device — nothing is uploaded.";
-  } else if (settings && settings.mode === "local") {
-    privacy = "Photos and text go to your local network server — they stay on your network.";
-  } else if (settings) {
-    privacy = "Photos and text are sent to Hugging Face (Qwen3.5-9B) for processing.";
-  } else {
-    privacy = "Photos and text are sent to the configured AI provider for processing.";
-  }
-
-  const actions = h("div", { class: "actions" },
-    h("button", { class: "primary", onclick: onTranscribe }, "Transcribe"));
-  if (api.hasSettings()) {
-    actions.appendChild(h("button", { onclick: renderSettings }, "⚙ Settings"));
-  }
+        onchange: () => { state.language = val; enOnly.classList.toggle("hidden", val !== "en"); },
+      }), text);
 
   root.appendChild(h("section", { class: "card" },
-    h("h2", {}, "1. Capture"),
-    h("p", { class: "privacy" }, privacy),
+    h("h2", {}, "New essay"),
+    h("p", { class: "privacy" }, "Photos are processed on your own AI server and never leave your network."),
     h("div", { class: "lang-row" },
       h("span", {}, "Language:"),
       langRadio("zh-Hans", "简体中文"),
@@ -181,177 +243,166 @@ function renderCapture() {
     enOnly,
     fileSlot("Question pages (in order)", "question"),
     fileSlot("Essay pages (in order)", "essay"),
-    actions));
-}
-
-// --- settings screen (Android only) --------------------------------------
-
-function renderSettings() {
-  const root = app();
-  clear(root);
-  const s = api.getSettings() || {
-    mode: "offline", hfToken: "", hfModel: "", localUrl: "",
-    localReadModel: "gemma4:26b", localGradeModel: "gemma4:26b", localUnloadReader: true,
-    offlineModelName: "Qwen3.5-4B", ramGb: 0, minMemoryGb: 10.5,
-  };
-
-  // --- on-device block (fixed Qwen3.5-4B; memory requirement) ---
-  const enough = !s.ramGb || s.ramGb >= s.minMemoryGb;
-  const offlineBlock = h("div", { class: "online-block" + (s.mode === "offline" ? "" : " hidden") },
-    h("p", {}, `On-device model: ${s.offlineModelName}.`),
-    h("p", { class: enough ? "hint" : "mem-warn" },
-      `The offline model needs at least ${s.minMemoryGb} GB in memory for ` +
-      `recommended performance. Your system has ${s.ramGb} GB.`));
-
-  // --- local network server block ---
-  const localUrlInput = h("input", { type: "text", class: "edit", placeholder: "http://192.168.1.50:11434/v1", value: s.localUrl || "" });
-  const readInput = h("input", { type: "text", class: "edit", placeholder: "gemma4:26b", value: s.localReadModel || "" });
-  const gradeInput = h("input", { type: "text", class: "edit", placeholder: "gemma4:26b", value: s.localGradeModel || "" });
-  const unloadChk = h("input", { type: "checkbox", checked: s.localUnloadReader !== false });
-  localUrlInput.addEventListener("input", () => { s.localUrl = localUrlInput.value; });
-  readInput.addEventListener("input", () => { s.localReadModel = readInput.value; });
-  gradeInput.addEventListener("input", () => { s.localGradeModel = gradeInput.value; });
-  unloadChk.addEventListener("change", () => { s.localUnloadReader = unloadChk.checked; });
-  const localStatus = h("p", { class: "hint" }, "");
-  const testBtn = h("button", {
-    onclick: async () => {
-      localStatus.className = "hint"; localStatus.textContent = "Testing…";
-      try {
-        const r = await api.pingLocal(localUrlInput.value);
-        localStatus.className = r.ok ? "hint ok-text" : "mem-warn";
-        localStatus.textContent = r.detail || (r.ok ? "Reachable." : "Not reachable.");
-      } catch (e) {
-        localStatus.className = "mem-warn"; localStatus.textContent = e.message;
-      }
-    },
-  }, "Test connection");
-  const localBlock = h("div", { class: "online-block" + (s.mode === "local" ? "" : " hidden") },
-    h("label", {}, "Server URL"),
-    localUrlInput,
-    h("label", {}, "Reading model (OCR)"),
-    readInput,
-    h("label", {}, "Grading model"),
-    gradeInput,
-    h("label", { class: "radio" }, unloadChk, h("span", {}, " Unload the reading model after OCR (frees memory)")),
-    h("div", { class: "actions" }, testBtn),
-    localStatus,
-    h("p", { class: "hint" }, "Your Ollama / llama.cpp server on the same Wi-Fi. Essays stay on your network."));
-
-  // --- Hugging Face block ---
-  const keyInput = h("input", { type: "password", class: "edit", placeholder: "hf_…", value: s.hfToken || "" });
-  const modelInput = h("input", { type: "text", class: "edit", placeholder: "Qwen/Qwen3.5-9B", value: s.hfModel || "" });
-  keyInput.addEventListener("input", () => { s.hfToken = keyInput.value; });
-  modelInput.addEventListener("input", () => { s.hfModel = modelInput.value; });
-  const hfBlock = h("div", { class: "online-block" + (s.mode === "hf" ? "" : " hidden") },
-    h("label", {}, "Hugging Face token"),
-    keyInput,
-    h("label", {}, "Model (optional)"),
-    modelInput,
-    h("p", { class: "hint" }, "Essays are sent to Hugging Face (Qwen3.5-9B). Token: huggingface.co/settings/tokens"));
-
-  const blocks = { offline: offlineBlock, local: localBlock, hf: hfBlock };
-  const modeRadio = (mode, text, sub) =>
-    h("label", { class: "radio mode" },
-      h("input", {
-        type: "radio", name: "mode", checked: s.mode === mode,
-        onchange: () => {
-          s.mode = mode;
-          for (const m in blocks) blocks[m].classList.toggle("hidden", m !== mode);
-        },
-      }),
-      h("span", {}, text), sub ? h("span", { class: "hint" }, " " + sub) : null);
-
-  root.appendChild(h("section", { class: "card" },
-    h("h2", {}, "Settings"),
-    h("div", {}, modeRadio("offline", "On-device", "— private, slower")),
-    h("div", {}, modeRadio("local", "Local network server", "— private, fast")),
-    h("div", {}, modeRadio("hf", "Hugging Face (cloud)", "— sends data out")),
-    offlineBlock,
-    localBlock,
-    hfBlock,
     h("div", { class: "actions" },
-      h("button", { onclick: renderCapture }, "← Back"),
-      h("button", {
-        class: "primary",
-        onclick: () => {
-          api.saveSettings(s);
-          refreshHealth();
-          renderCapture();
-        },
-      }, "Save"))));
+      h("button", { onclick: goHome }, "← Home"),
+      h("button", { class: "primary", onclick: onCreate }, "Transcribe"))));
 }
 
-async function onTranscribe() {
+async function onCreate() {
   if (!state.questionFiles.length || !state.essayFiles.length) {
     alert("Add at least one question page and one essay page.");
     return;
   }
-  showOverlay("Transcribing…");
+  showOverlay("Uploading…");
   try {
     const q = await Promise.all(state.questionFiles.map(downscale));
     const e = await Promise.all(state.essayFiles.map(downscale));
-    state.transcript = await api.transcribe(q, e, state.language);
-    renderReview();
+    const { id } = await api.createSession(q, e, state.language, state.paperType);
+    goSession(id); // hashchange -> openSession -> waits on transcription
   } catch (err) {
-    alert("Transcribe failed:\n" + err.message);
+    alert("Couldn't start:\n" + err.message);
   } finally {
     hideOverlay();
   }
 }
 
-// --- screen 2: transcription review --------------------------------------
+// --- session routing + waiting -------------------------------------------
 
-function renderReview() {
+async function openSession(id) {
+  showOverlay("Loading…");
+  let s;
+  try {
+    s = await api.getSession(id);
+  } catch (err) {
+    hideOverlay();
+    renderMessage("Session not found", err.message, true);
+    return;
+  }
+  hideOverlay();
+  routeSession(s);
+}
+
+function routeSession(s) {
+  switch (s.status) {
+    case "graded": return renderResults(s);
+    case "transcribed": return renderReview(s);
+    case "error": return renderError(s);
+    case "grading": return waitThenRoute(s.id, "Grading the essay…");
+    default: return waitThenRoute(s.id, "Transcribing the essay…"); // created / transcribing
+  }
+}
+
+async function waitThenRoute(id, msg) {
+  renderWaiting(id, msg);
+  const myNav = nav;
+  while (myNav === nav) {
+    let s;
+    try {
+      s = await api.getSession(id);
+    } catch {
+      await sleep(POLL_MS);
+      continue;
+    }
+    if (myNav !== nav) return;
+    if (["transcribed", "graded", "error"].includes(s.status)) {
+      routeSession(s);
+      return;
+    }
+    const line = document.getElementById("wait-status");
+    if (line) line.textContent = (STATUS[s.status] || STATUS.created).label;
+    await sleep(POLL_MS);
+  }
+}
+
+function copyLinkButton() {
+  return h("button", {
+    onclick: (e) => {
+      navigator.clipboard?.writeText(location.href);
+      e.target.textContent = "Link copied ✓";
+    },
+  }, "Copy link for another device");
+}
+
+function renderWaiting(id, msg) {
+  ++nav;
   const root = app();
   clear(root);
-  const t = state.transcript;
+  root.appendChild(h("section", { class: "card waiting" },
+    h("div", { class: "spinner" }),
+    h("h2", {}, msg),
+    h("p", { id: "wait-status", class: "hint" }, "Working…"),
+    h("p", { class: "hint" }, "This runs on your AI server — you can close this and pick it up on any device from the Home list."),
+    h("div", { class: "actions" },
+      h("button", { onclick: goHome }, "← Home"),
+      copyLinkButton())));
+}
+
+function renderMessage(title, body, showHome) {
+  ++nav;
+  const root = app();
+  clear(root);
+  root.appendChild(h("section", { class: "card" },
+    h("h2", {}, title),
+    h("p", { class: "hint" }, body || ""),
+    showHome ? h("div", { class: "actions" }, h("button", { onclick: goHome }, "← Home")) : null));
+}
+
+function renderError(s) {
+  ++nav;
+  const root = app();
+  clear(root);
+  root.appendChild(h("section", { class: "card" },
+    h("h2", {}, "Something went wrong"),
+    h("p", { class: "mem-warn" }, s.error || "Unknown error."),
+    h("div", { class: "actions" },
+      h("button", { onclick: goHome }, "← Home"),
+      h("button", {
+        class: "primary",
+        onclick: async () => {
+          try { await api.retranscribe(s.id); openSession(s.id); } catch (e) { alert(e.message); }
+        },
+      }, "Retry transcription"))));
+}
+
+// --- screen: review ------------------------------------------------------
+
+function renderReview(s) {
+  ++nav;
+  const root = app();
+  clear(root);
 
   const qta = h("textarea", { class: "edit", rows: "5" });
-  qta.value = t.question_text || "";
+  qta.value = s.question_text || "";
   const eta = h("textarea", { class: "edit", rows: "16" });
-  eta.value = t.essay_text || "";
+  eta.value = s.essay_text || "";
 
   root.appendChild(h("section", { class: "card" },
-    h("h2", {}, "2. Review transcription"),
+    h("h2", {}, "Review transcription"),
     h("p", { class: "hint" }, "Fix any OCR slips before grading — the grader sees this text."),
     h("label", {}, "Question"),
     qta,
     h("label", {}, "Essay"),
     eta,
     h("div", { class: "actions" },
-      h("button", { onclick: renderCapture }, "← Back"),
+      h("button", { onclick: goHome }, "← Home"),
       h("button", {
         class: "primary",
-        onclick: () => {
-          state.transcript.question_text = qta.value;
-          state.transcript.essay_text = eta.value;
-          onGrade();
+        onclick: async () => {
+          showOverlay("Starting grading…");
+          try {
+            await api.saveTranscription(s.id, qta.value, eta.value);
+            await api.gradeSession(s.id);
+            hideOverlay();
+            openSession(s.id);
+          } catch (err) {
+            hideOverlay();
+            alert("Couldn't grade:\n" + err.message);
+          }
         },
       }, "Grade this essay"))));
 }
 
-async function onGrade() {
-  if (!state.transcript.essay_text.trim()) {
-    alert("Nothing to grade — the essay text is empty.");
-    return;
-  }
-  showOverlay("Grading…");
-  try {
-    state.grade = await api.grade({
-      language: state.transcript.language || state.language,
-      paper_type: state.paperType,
-      question_text: state.transcript.question_text,
-      essay_text: state.transcript.essay_text,
-    });
-    renderResults();
-  } catch (err) {
-    alert("Grade failed:\n" + err.message);
-  } finally {
-    hideOverlay();
-  }
-}
-
-// --- screen 3: annotated results -----------------------------------------
+// --- screen: marked results ----------------------------------------------
 
 function scoreTable(g) {
   const rows = scoreRows(g.scores, g.score_after_v1, g.target_score);
@@ -370,18 +421,18 @@ function annotatedBlock(title, text, edits, comments) {
   return h("div", { class: "annotated" }, ...parts);
 }
 
-function renderResults() {
+function renderResults(s) {
+  ++nav;
   const root = app();
   clear(root);
-  const g = state.grade;
-  const essay = state.transcript.essay_text;
+  const g = s.grade;
+  const essay = s.essay_text;
 
-  const section = h("section", { class: "card results" }, h("h2", {}, "3. Marked essay"));
+  const section = h("section", { class: "card results" }, h("h2", {}, "Marked essay"));
 
   const table = scoreTable(g);
   if (table) section.appendChild(table);
 
-  // Original essay with Round-1 redlines + the per-edit reasons as comments.
   const r1Comments = (g.comments || []).concat(
     (g.tracked_edits || []).map((e) => ({
       span: e.original_span,
@@ -392,7 +443,6 @@ function renderResults() {
   section.appendChild(annotatedBlock("Original (Round 1: mechanical fixes)",
     essay, g.tracked_edits || [], r1Comments));
 
-  // Improved Version: Round-2 edits over the v1-corrected text.
   if ((g.improvement_edits || []).length) {
     const v1 = applyEdits(essay, g.tracked_edits || []);
     const r2Comments = (g.improvement_edits || []).map((e) => ({
@@ -413,22 +463,30 @@ function renderResults() {
   }
 
   section.appendChild(h("div", { class: "actions" },
-    h("button", { onclick: renderReview }, "← Back to text"),
-    h("button", { class: "primary", onclick: resetAndCapture }, "Grade another"),
+    h("button", { onclick: goHome }, "← Home"),
+    h("button", { onclick: () => renderReview(s) }, "Edit text & re-grade"),
+    h("button", { class: "primary", onclick: goNew }, "Grade another"),
     h("button", { onclick: () => window.print() }, "Print / Save PDF")));
 
   root.appendChild(section);
 }
 
-function resetAndCapture() {
-  state.questionFiles = [];
-  state.essayFiles = [];
-  state.transcript = null;
-  state.grade = null;
-  renderCapture();
+// --- router + boot -------------------------------------------------------
+
+function router() {
+  const hash = location.hash.replace(/^#/, "");
+  if (hash === "new") return renderCapture();
+  const m = hash.match(/^s\/(.+)$/);
+  if (m) return openSession(m[1]);
+  return renderHome();
 }
 
-// --- boot ----------------------------------------------------------------
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js").catch(() => {});
+  });
+}
 
+window.addEventListener("hashchange", router);
 refreshHealth();
-renderCapture();
+router();

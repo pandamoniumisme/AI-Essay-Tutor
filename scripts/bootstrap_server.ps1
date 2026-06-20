@@ -6,9 +6,9 @@
 .DESCRIPTION
   Creates a Python venv at %LOCALAPPDATA%\AIEssayTutor\venv and installs the
   server package (editable, so the developer can edit the server\ tree in
-  place). Online inference goes to Hugging Face (Qwen3.5-9B), so there is NO
-  multi-GB model download -- just set an HF_TOKEN (see the end of this script)
-  and run the dev server.
+  place). Inference goes to a local Ollama server (gemma4:26b), so there is NO
+  multi-GB download here -- just make sure Ollama is reachable (locally or via
+  AITUTOR_OLLAMA_URL) and run the dev server.
 
 .EXAMPLE
   .\scripts\bootstrap_server.ps1
@@ -119,14 +119,11 @@ Write-Host "`nInstalling server package (editable)..."
 & $venvPython -m pip install --editable (Join-Path $repoRoot "server")
 if ($LASTEXITCODE -ne 0) { Write-Error "pip install failed"; exit 1 }
 
-# --- 3. Hugging Face token reminder -------------------------------------
-$configFile = Join-Path $env:APPDATA "AIEssayTutor\config.json"
-if (-not ($env:HF_TOKEN) -and -not (Test-Path $configFile)) {
-    Write-Host "`nNo Hugging Face token found." -ForegroundColor Yellow
-    Write-Host "Set one before running the server, e.g.:"
-    Write-Host '    $env:HF_TOKEN = "hf_your-token-here"' -ForegroundColor Gray
-    Write-Host "  or create $configFile with:"
-    Write-Host '    { "hf_token": "hf_your-token-here" }' -ForegroundColor Gray
+# --- 3. Ollama endpoint reminder ----------------------------------------
+if (-not ($env:AITUTOR_OLLAMA_URL)) {
+    Write-Host "`nUsing the default Ollama endpoint http://127.0.0.1:11434/v1." -ForegroundColor Yellow
+    Write-Host "If Ollama runs on another box, set:"
+    Write-Host '    $env:AITUTOR_OLLAMA_URL = "http://aiserver:11434/v1"' -ForegroundColor Gray
 }
 
 Write-Host "`nDone." -ForegroundColor Green

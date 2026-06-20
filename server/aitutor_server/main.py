@@ -1,15 +1,17 @@
-"""FastAPI entry point for the local web app.
+"""FastAPI entry point for the web app.
 
-Serves the browser SPA (static bundle) and the JSON API. Inference is
-delegated to the online provider (Hugging Face Inference Providers, via the
-OpenAI-compatible router), so there is no model download, no NPU, and no
-port-file handshake with a LibreOffice extension anymore -- just a fixed local
-port the launcher opens in the browser.
+Serves the installable PWA (static bundle) and the JSON API. Inference is
+delegated to the local Ollama server on the same box (gemma4:26b), so nothing
+leaves the machine. Grading sessions are persisted server-side and run as
+background jobs, so a session started on one device can be picked up on another
+over the tailnet. In production the app binds to localhost and is exposed over
+HTTPS by ``tailscale serve``.
 """
 from __future__ import annotations
 
 import argparse
 import logging
+import mimetypes
 import webbrowser
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -18,32 +20,36 @@ import uvicorn
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
-from aitutor_server import __version__
-from aitutor_server.api import grade as grade_api
-from aitutor_server.api import transcribe as transcribe_api
+from aitutor_server import __version__, sessions
+from aitutor_server.api import sessions as sessions_api
 from aitutor_server.paths import ensure_dirs
 from aitutor_server.providers import config as provider_config
 from aitutor_server.util.log import setup_logging
 
 _STATIC_DIR = Path(__file__).parent / "static"
 
+# Serve manifest.webmanifest with the right type for PWA installability.
+mimetypes.add_type("application/manifest+json", ".webmanifest")
+
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     setup_logging()
+    ensure_dirs()
+    sessions.init_db()
+    sessions.reset_interrupted()
     log = logging.getLogger(__name__)
-    log.info("PSLE Compo Tutor (web) v%s starting (provider=%s, model=%s)",
-             __version__, provider_config.active_name(), provider_config.model())
-    if not provider_config.key_present():
-        log.warning("no API key for provider '%s'; /api calls return 503 until a key is set",
-                    provider_config.active_name())
+    log.info("AI Essay Tutor v%s starting (backend=ollama, base_url=%s, model=%s)",
+             __version__, provider_config.base_url(), provider_config.model())
+    if not provider_config.reachable():
+        log.warning("Ollama not reachable at %s; jobs will fail until it's up",
+                    provider_config.base_url())
     yield
     log.info("AI Essay Tutor shutting down")
 
 
 app = FastAPI(title="AI Essay Tutor", version=__version__, lifespan=lifespan)
-app.include_router(transcribe_api.router)
-app.include_router(grade_api.router)
+app.include_router(sessions_api.router)
 
 
 @app.get("/api/health")

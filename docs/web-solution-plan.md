@@ -1,6 +1,18 @@
 # Web Solution Plan — AI Essay Tutor
 
-**Status:** proposal / planning. Nothing here is built yet.
+> **SUPERSEDED (2026-06).** This document describes an earlier cloud-inference
+> plan (a local web app delegating to Google Gemini). The project has since
+> pivoted to the **current** architecture: an installable **PWA served from a
+> self-hosted Ubuntu AI server running Ollama `gemma4:26b`, reached over
+> Tailscale**, with **server-side persisted sessions + background jobs** for
+> cross-device hand-off. The previous approaches (cloud HF/Gemini, Android
+> on-device) were privacy/quality compromises and are retired. See `CLAUDE.md`
+> and `README.md` for what is actually built; deployment lives in the
+> `ubuntuserver` repo (`provision-essay-tutor.sh`). The sections below are kept
+> for historical context — the §5 frontend / span-anchoring and §4 grade
+> validation discussion still informed the shipped code.
+
+**Status:** historical / superseded. Nothing in *this plan* was built as written.
 **Date:** 2026-06-06.
 **Decisions locked in (from product owner):**
 

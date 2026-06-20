@@ -1,11 +1,10 @@
 """LLM grader.
 
-Generation is delegated to the active online provider (Hugging Face / Qwen3.5-9B
-via the OpenAI-compatible backend) and asked for a JSON response; the
-*validation* half (lenient parse, drop hallucinated/no-op spans, clamp scores,
-compute the v1-corrected essay for improvement-edit validation) is
-model-independent and still earns its keep -- any model can propose a span that
-isn't in the essay.
+Generation is delegated to the local Ollama backend (gemma4:26b via the
+OpenAI-compatible API) and asked for a JSON response; the *validation* half
+(lenient parse, drop hallucinated/no-op spans, clamp scores, compute the
+v1-corrected essay for improvement-edit validation) is model-independent and
+still earns its keep -- any model can propose a span that isn't in the essay.
 
 The grader prompts (with the Singapore-vocabulary allowlists) live in
 ``providers/prompts/grader_{en,zh}.md`` and are passed as the system message.
@@ -77,14 +76,13 @@ def _user_prompt(req: GradeRequest) -> str:
 # --- JSON schema (per-route score caps) ----------------------------------
 
 def _grade_response_json_schema(req: GradeRequest) -> dict:
-    """Build the grade-output JSON schema. With the active provider's
-    ``structured`` mode == "none" (see config.py / client.py) this schema is NOT
-    sent on the wire as a ``response_format``; its real job is documenting and
-    deriving the per-route score caps -- ``max_total`` is pinned via
-    minimum==maximum and the per-paper sub-mark caps via minimum/maximum. It is
-    kept OpenAI/json_schema-shaped (no ``additionalProperties``/``const``/
-    ``default``) so it can be enforced as-is if a provider's ``structured`` mode
-    is ever switched on."""
+    """Build the grade-output JSON schema. The backend is asked only for a JSON
+    *object* (``response_format={"type": "json_object"}`` in client.py), not for
+    this exact schema, so its real job is documenting and deriving the per-route
+    score caps -- ``max_total`` is pinned via minimum==maximum and the per-paper
+    sub-mark caps via minimum/maximum. It is kept OpenAI/json_schema-shaped (no
+    ``additionalProperties``/``const``/``default``) so it could be enforced
+    as-is if strict schema output is ever switched on."""
     if req.language == "zh-Hans":
         content_max, language_max, total_max = 20, 20, 40
     elif req.paper_type == "situational":

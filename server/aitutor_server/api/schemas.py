@@ -2,11 +2,10 @@
 
 Single source of truth for both the FastAPI request/response shapes and the
 JSON schema that documents the grader's per-route score caps. Inference goes to
-the Hugging Face Inference Providers router over its OpenAI-compatible API; the
-grader's ``structured`` mode is ``"none"`` (see ``providers/config.py``), so that
-schema is NOT sent on the wire as a ``response_format`` -- it documents/derives
+the local Ollama backend over its OpenAI-compatible API; the grade call asks
+only for a JSON *object* (not this exact schema), so the schema documents/derives
 the caps while a lenient parser carries JSON correctness. Keep these in sync with
-the plan and ``providers/grader.py``.
+``providers/grader.py``.
 """
 from __future__ import annotations
 

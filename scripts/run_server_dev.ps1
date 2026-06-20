@@ -21,11 +21,9 @@ if (-not (Test-Path $venvPython)) {
     exit 1
 }
 
-if (-not ($env:HF_TOKEN)) {
-    $configFile = Join-Path $env:APPDATA "AIEssayTutor\config.json"
-    if (-not (Test-Path $configFile)) {
-        Write-Warning "No HF_TOKEN set and no config.json; /api calls will 503 until you add a token."
-    }
+if (-not ($env:AITUTOR_OLLAMA_URL)) {
+    Write-Host "AITUTOR_OLLAMA_URL not set; defaulting to http://127.0.0.1:11434/v1 (Ollama on this box)."
+    Write-Host '  Point elsewhere with:  $env:AITUTOR_OLLAMA_URL = "http://aiserver:11434/v1"'
 }
 
 # Wipe stale .pyc bytecode -- watchfiles can reload the .py but Python still

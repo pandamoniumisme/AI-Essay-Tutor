@@ -25,7 +25,7 @@ echo "==> Installing the server package"
 if [ ! -f .env ]; then
   echo "==> Creating .env from .env.example"
   cp .env.example .env
-  echo "    Edit .env and paste your Gemini API key (GEMINI_API_KEY=...)."
+  echo "    Edit .env only if Ollama isn't on this box (AITUTOR_OLLAMA_URL=...)."
 else
   echo "==> .env already exists; leaving it untouched"
 fi
@@ -42,5 +42,5 @@ chmod +x run.sh
 
 echo
 echo "Done."
-echo "  1. Put your key in .env  (get one at https://aistudio.google.com/apikey)"
+echo "  1. Make sure Ollama is serving gemma4:26b (locally or set AITUTOR_OLLAMA_URL in .env)"
 echo "  2. ./run.sh              # opens http://127.0.0.1:8765"

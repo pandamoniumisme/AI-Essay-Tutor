@@ -1,4 +1,5 @@
 # Build output
+build/
 dist/
 *.oxt
 
@@ -36,7 +37,7 @@ tests/_output/
 # Local config that shouldn't be committed
 *.local.json
 
-# Secrets -- Gemini API key must never be committed
+# Local secrets / config that shouldn't be committed
 .env
 config.json
 
