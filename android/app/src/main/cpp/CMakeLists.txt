@@ -1,13 +1,19 @@
-# Native engine build (Qwen3.5 via llama.cpp). OFF by default — the app's
-# externalNativeBuild is commented out in app/build.gradle.kts so the APK builds
-# without the NDK. To enable on a machine with the NDK + a device for bring-up:
+# Native engine build (Qwen3.5 via llama.cpp). OFF by default: app/build.gradle.kts
+# only turns on externalNativeBuild when this directory actually contains a
+# llama.cpp checkout, so the Phase-1 stub APK still builds without the NDK.
+# To enable on a machine with the NDK + a device for bring-up:
 #
-#   1. Vendor llama.cpp (pin a recent commit — Qwen3.5 Gated DeltaNet + libmtmd
-#      vision only exist in newer checkouts):
+#   1. Vendor llama.cpp (pin a recent commit — as of mid-2026 Qwen3.5's hybrid
+#      Gated-DeltaNet/attention graph and libmtmd vision are still landing on
+#      HEAD, not a tagged release; confirm current status before pinning):
 #        git submodule add https://github.com/ggml-org/llama.cpp \
 #            android/app/src/main/cpp/llama.cpp
-#   2. Uncomment externalNativeBuild in app/build.gradle.kts.
-#   3. Build; iterate on the mtmd/grammar API against the pinned tag.
+#      (CI does the equivalent via a plain checkout in the build-apk-native
+#      job — see .github/workflows/android.yml — so a submodule pointer
+#      doesn't need to be committed to this repo.)
+#   2. Build — externalNativeBuild picks this checkout up automatically.
+#   3. Iterate on the mtmd/grammar API against the pinned commit; it is
+#      version-sensitive (see llama_jni.cpp).
 
 cmake_minimum_required(VERSION 3.22.1)
 project(aitutor_llama CXX)

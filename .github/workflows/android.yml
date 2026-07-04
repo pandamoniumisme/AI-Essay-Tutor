@@ -80,3 +80,52 @@ jobs:
             Download **app-debug.apk** below and install on the phone.
           files: android/app/build/outputs/apk/debug/app-debug.apk
 
+  # Phase 2, manual-only: compile the real llama.cpp/Qwen3.5 native engine.
+  # Not run on every push/PR — it's a slow, still-unverified from-source C++
+  # build (llama.cpp's Qwen3.5 hybrid-graph + libmtmd support is landing on
+  # HEAD, not a tagged release, as of mid-2026 — see cpp/CMakeLists.txt) that
+  # shouldn't gate the normal stub-APK CI status. Trigger it by hand from
+  # Actions → Android → Run workflow when you want to check whether the
+  # native build still compiles.
+  build-apk-native:
+    name: build debug APK (native llama.cpp engine)
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      # A plain checkout of llama.cpp into the path CMakeLists.txt expects,
+      # instead of a committed git submodule pointer — this repo doesn't pin
+      # a llama.cpp commit yet (needs on-device verification first; see
+      # cpp/CMakeLists.txt). TODO(pin): once a commit is confirmed working
+      # against the Qwen3.5 GGUF/mmproj in ModelRepo.kt, pin `ref:` to that
+      # commit SHA for reproducibility instead of tracking master.
+      - name: Checkout llama.cpp
+        uses: actions/checkout@v4
+        with:
+          repository: ggml-org/llama.cpp
+          ref: master
+          path: android/app/src/main/cpp/llama.cpp
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: android-actions/setup-android@v3
+      - name: Install SDK + NDK + CMake packages
+        # NDK/CMake revisions below are current as of authoring time; if
+        # sdkmanager can't find one, run `sdkmanager --list` in this step's
+        # log and swap in whatever revision is actually available.
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0" "ndk;27.2.12479018" "cmake;3.22.1"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.9"
+      - name: Assemble debug APK (native engine)
+        working-directory: android
+        run: gradle :app:assembleDebug --no-daemon --stacktrace --console=plain
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: app-debug-apk-native
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: warn
+

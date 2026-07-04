@@ -129,18 +129,23 @@ recommendation all work on your device.
 
 ## 7. Phase 2: enable the real on-device model
 
-The stub becomes real once the llama.cpp layer is wired. Summary (full steps in
-[`README.md`](README.md#enable-the-real-model-phase-2)):
+The Kotlin/JNI/download-manager side of this is already wired (see
+`README.md`'s Status section). What's actually left, summarized (full detail
+in [`README.md`](README.md#enable-the-real-model-phase-2)):
 
-1. Vendor llama.cpp as a submodule under `app/src/main/cpp/llama.cpp` (a recent
-   commit — Qwen3.5 needs newer ops + `libmtmd` vision support).
-2. Uncomment `externalNativeBuild` in `app/build.gradle.kts` and the
-   `add_subdirectory` / `target_link_libraries` lines in `cpp/CMakeLists.txt`.
-3. Implement the four stubs in `cpp/llama_jni.cpp`.
-4. Switch `Inference.create()` to return `LlamaInference(context)`.
-5. Add the model download manager (fetches the recommended Qwen3.5-2B/4B GGUF +
-   `mmproj` on first run).
-6. Install the NDK (Android Studio → SDK Manager → SDK Tools → **NDK**).
+1. Install the NDK (Android Studio → SDK Manager → SDK Tools → **NDK**).
+2. Vendor llama.cpp as a submodule under `app/src/main/cpp/llama.cpp` (a recent
+   commit — Qwen3.5 needs newer ops + `libmtmd` vision support; still landing
+   on HEAD as of mid-2026, confirm current status). `externalNativeBuild`
+   turns on automatically once this checkout exists — no build file edits
+   needed. A GitHub Actions job (`build-apk-native`, manually triggered) does
+   the equivalent checkout in CI.
+3. Fill in real, verified Hugging Face URLs + sha256 in `ModelRepo.kt` (candidate
+   repos are noted in its doc-comment, but unverified — confirm the exact
+   filenames yourself).
+4. Build, then iterate on the `mtmd`/grammar API in `cpp/llama_jni.cpp` against
+   whatever commit you pinned — it's version-sensitive and needs real
+   on-device verification.
 
 > Before investing in Phase 2, run the **Phase 0 desktop quality gate**
 > (Qwen3.5-2B vs real handwriting samples) — small models can summarise instead

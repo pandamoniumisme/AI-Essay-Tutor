@@ -17,11 +17,16 @@ android {
         ndk { abiFilters += "arm64-v8a" }  // the phone is arm64 only
     }
 
-    // Phase 2: enable the llama.cpp native build. Left disabled so the Phase-1
-    // stub app builds without the NDK / llama.cpp checkout.
-    // externalNativeBuild {
-    //     cmake { path = file("src/main/cpp/CMakeLists.txt") }
-    // }
+    // Phase 2: the llama.cpp native build turns on automatically once
+    // llama.cpp is actually checked out at src/main/cpp/llama.cpp (see
+    // CMakeLists.txt) — a plain `git submodule add` there is enough, no manual
+    // edit here needed. Absent that checkout, the Phase-1 stub app still
+    // builds without the NDK.
+    if (file("src/main/cpp/llama.cpp/CMakeLists.txt").exists()) {
+        externalNativeBuild {
+            cmake { path = file("src/main/cpp/CMakeLists.txt") }
+        }
+    }
 
     buildTypes {
         release {

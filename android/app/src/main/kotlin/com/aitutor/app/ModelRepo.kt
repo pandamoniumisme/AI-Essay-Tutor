@@ -5,11 +5,20 @@ import com.aitutor.core.ModelChoice
 /**
  * Where the on-device GGUF weights + vision projector come from, per model.
  *
- * IMPORTANT: the URLs below are placeholders. Qwen3.5 GGUF builds + their
- * `mmproj` vision projectors must be confirmed against an actual Hugging Face
- * repo before release (filenames and quant tags vary by uploader). Edit the
- * `weightsUrl`/`mmprojUrl`/`sha256` here, or drop a `models.json` override into
- * the app's files dir. The downloader verifies sha256 when one is provided.
+ * IMPORTANT: the URLs below are still placeholders — huggingface.co isn't
+ * reachable from the sandbox that last edited this file, so the exact file
+ * names + sha256 couldn't be confirmed directly. Candidate repos to check
+ * (found via web search, not yet verified):
+ *   - https://huggingface.co/unsloth/Qwen3.5-2B-GGUF — quantized weights
+ *     (Unsloth's GGUF releases; check for a Q4_K_M-class file).
+ *   - https://huggingface.co/prithivMLmods/Qwen3.5-abliterated-MAX-AIO-GGUF —
+ *     reportedly ships multiple `mmproj` (vision projector) quantizations
+ *     (f32/bf16/f16/q8_0) alongside the weights.
+ * Open both repo pages, copy the exact weights/mmproj file URLs, and use
+ * Hugging Face's displayed SHA256 (or `sha256sum` the downloaded file) for
+ * `weightsSha256`/`mmprojSha256` below — or drop a `models.json` override
+ * into the app's files dir. The downloader verifies sha256 when one is
+ * provided.
  */
 data class ModelFiles(
     val choice: ModelChoice,

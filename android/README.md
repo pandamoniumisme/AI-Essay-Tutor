@@ -90,14 +90,27 @@ cd android && gradle :app:assembleDebug   # requires ANDROID_HOME + SDK
 
 ## Enable the real model (Phase 2)
 
-1. Vendor llama.cpp (recent commit — Qwen3.5 Gated DeltaNet + `libmtmd` vision):
+Everything except the native checkout + a verified model file is already
+wired (`LlamaInference`, `ModelDownloader`, the JNI bridge in
+`cpp/llama_jni.cpp`, `Inference.create()`'s automatic engine selection). What's
+actually left, on a machine with the NDK + a real device for bring-up:
+
+1. Vendor llama.cpp (recent commit — Qwen3.5's hybrid Gated-DeltaNet/attention
+   graph + `libmtmd` vision are still landing on HEAD, not a tagged release,
+   as of mid-2026; confirm current status first):
    `git submodule add https://github.com/ggml-org/llama.cpp android/app/src/main/cpp/llama.cpp`
-2. Uncomment `externalNativeBuild` in `app/build.gradle.kts` and the
-   `add_subdirectory`/`target_link_libraries` lines in `cpp/CMakeLists.txt`.
-3. Implement the four stubs in `cpp/llama_jni.cpp`.
-4. Switch `Inference.create()` to return `LlamaInference(context)`.
-5. Add the model download manager (Phase 4) to fetch the Qwen3.5-2B Q4 GGUF +
-   `mmproj` into `filesDir/models`.
+   — `app/build.gradle.kts` turns on `externalNativeBuild` automatically once
+   this checkout exists; nothing to edit there. (CI does the equivalent via a
+   plain checkout in the `build-apk-native` job — see
+   `.github/workflows/android.yml` — triggered manually since it's a slow,
+   still-unverified native build that shouldn't gate the normal stub-APK CI.)
+2. Fill in real, verified weights/mmproj URLs + sha256 in `ModelRepo.kt`
+   (currently placeholders with candidate Hugging Face repos noted in its
+   doc-comment — huggingface.co isn't reachable from every environment that
+   touches this file, so double-check the exact filenames yourself).
+3. Build (`:app:assembleDebug` or the `build-apk-native` CI job) and iterate
+   on the `mtmd`/grammar API in `cpp/llama_jni.cpp` against the pinned
+   commit — it's version-sensitive and needs on-device verification.
 
 ## Known risk
 
